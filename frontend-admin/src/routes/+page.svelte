@@ -10,6 +10,8 @@
   import AlertTriangle from 'lucide-svelte/icons/alert-triangle';
   import UserPlus from 'lucide-svelte/icons/user-plus';
   import ThumbsUp from 'lucide-svelte/icons/thumbs-up';
+  import ChevronDown from 'lucide-svelte/icons/chevron-down';
+  import ChevronUp from 'lucide-svelte/icons/chevron-up';
 
   interface AppRow {
     id: number;
@@ -41,6 +43,8 @@
     slots: number;
     slots_used: number;
     beneficiary_count: number;
+    pending_count: number;
+    approved_count: number;
   }
 
   interface RecentUser {
@@ -50,41 +54,75 @@
     created_at: string;
   }
 
+  // Grouped pending per program
+  interface ProgramGroup {
+    program_title: string;
+    program_id: number;
+    applicants: AppRow[];
+    expanded: boolean;
+  }
+
   let stats = $state<Stats | null>(null);
   let recentPending = $state<AppRow[]>([]);
   let recentApproved = $state<AppRow[]>([]);
   let recentUsers = $state<RecentUser[]>([]);
   let mostAssisted = $state<MostAssisted[]>([]);
   let nearlyFull = $state<ProgramStat[]>([]);
+  let allPrograms = $state<ProgramStat[]>([]);
+  let pendingGroups = $state<ProgramGroup[]>([]);
+  let rejectedApps = $state<AppRow[]>([]);
   let loading = $state(true);
   let error = $state('');
 
+  // For summary card dropdowns
+  let showPendingDropdown = $state(false);
+  let showRejectedDropdown = $state(false);
+
   onMount(async () => {
     try {
-      const [rep, pending, approved, users] = await Promise.all([
+      const [rep, pending, approved, users, rejected] = await Promise.all([
         apiFetch('/beneficiaries/reports/summary'),
         apiFetch('/applications?status=pending&sort=newest'),
         apiFetch('/applications?status=approved'),
         apiFetch('/users'),
+        apiFetch('/applications?status=rejected'),
       ]);
 
       stats = rep.summary;
       mostAssisted = (rep.mostAssisted as MostAssisted[]).slice(0, 5);
+      allPrograms = rep.perProgram as ProgramStat[];
 
-      // Programs nearly full (>= 75% slots used)
-      nearlyFull = (rep.perProgram as ProgramStat[])
+      // Nearly full: >= 75% slots used, sorted by fullest first
+      nearlyFull = allPrograms
         .filter((p: ProgramStat) => p.slots > 0 && (p.slots_used / p.slots) >= 0.75)
         .sort((a: ProgramStat, b: ProgramStat) => (b.slots_used / b.slots) - (a.slots_used / a.slots))
         .slice(0, 5);
 
-      recentPending = (pending as AppRow[])
-        .sort((a: AppRow, b: AppRow) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 8);
+      const sortedPending = (pending as AppRow[])
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      recentPending = sortedPending.slice(0, 20);
+
+      // Group pending by program
+      const groupMap = new Map<string, ProgramGroup>();
+      for (const app of sortedPending) {
+        if (!groupMap.has(app.program_title)) {
+          groupMap.set(app.program_title, {
+            program_title: app.program_title,
+            program_id: app.id,
+            applicants: [],
+            expanded: false,
+          });
+        }
+        groupMap.get(app.program_title)!.applicants.push(app);
+      }
+      pendingGroups = Array.from(groupMap.values()).slice(0, 8);
 
       recentApproved = (approved as AppRow[]).slice(0, 5);
+      rejectedApps = (rejected as AppRow[]).slice(0, 10);
 
       recentUsers = (users as RecentUser[])
-        .sort((a: RecentUser, b: RecentUser) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, 5);
 
     } catch (e) {
@@ -103,43 +141,9 @@
     return new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
-  const cards = [
-    {
-      key: 'totalPrograms' as keyof Stats,
-      label: 'Total Programs',
-      icon: ClipboardList,
-      href: '/programs',
-      bg: 'bg-[#0A1F44]/10', text: 'text-[#0A1F44]', border: 'border-[#0A1F44]/15'
-    },
-    {
-      key: 'activePrograms' as keyof Stats,
-      label: 'Active Programs',
-      icon: CheckSquare,
-      href: '/programs?status=active',
-      bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100'
-    },
-    {
-      key: 'pendingApps' as keyof Stats,
-      label: 'Pending Applications',
-      icon: Clock,
-      href: '/applications?status=pending',
-      bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-100'
-    },
-    {
-      key: 'approvedBeneficiaries' as keyof Stats,
-      label: 'Total Beneficiaries',
-      icon: Users,
-      href: '/beneficiaries',
-      bg: 'bg-[#0A1F44]/10', text: 'text-[#0A1F44]', border: 'border-[#0A1F44]/15'
-    },
-    {
-      key: 'rejectedApps' as keyof Stats,
-      label: 'Rejected Applications',
-      icon: XCircle,
-      href: '/applications?status=rejected',
-      bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-100'
-    },
-  ];
+  function toggleGroup(i: number) {
+    pendingGroups[i].expanded = !pendingGroups[i].expanded;
+  }
 </script>
 
 <div class="p-6 space-y-6">
@@ -159,23 +163,114 @@
 
     <!-- ── Summary Cards ── -->
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
-      {#each cards as card}
-        <a
-          href={card.href}
-          class="card border {card.border} {card.bg} {card.text} flex flex-col gap-1
-                 no-underline hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer"
+
+      <!-- Total Programs -->
+      <a
+        href="/programs"
+        class="card border border-[#0A1F44]/15 bg-[#0A1F44]/10 text-[#0A1F44] flex flex-col gap-1
+               no-underline hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer"
+      >
+        <ClipboardList size={26} />
+        <div class="text-3xl font-bold mt-1">{stats.totalPrograms ?? 0}</div>
+        <div class="text-xs font-medium">Total Programs</div>
+      </a>
+
+      <!-- Active Programs — links to open programs only -->
+      <a
+        href="/programs?status=open"
+        class="card border border-emerald-100 bg-emerald-50 text-emerald-700 flex flex-col gap-1
+               no-underline hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer"
+      >
+        <CheckSquare size={26} />
+        <div class="text-3xl font-bold mt-1">{stats.activePrograms ?? 0}</div>
+        <div class="text-xs font-medium">Active Programs</div>
+      </a>
+
+      <!-- Pending Applications — clickable, shows dropdown list -->
+      <div class="relative">
+        <button
+          onclick={() => { showPendingDropdown = !showPendingDropdown; showRejectedDropdown = false; }}
+          class="card border border-amber-100 bg-amber-50 text-amber-700 flex flex-col gap-1 w-full text-left
+                 hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer"
         >
-          <card.icon size={26} />
-          <div class="text-3xl font-bold mt-1">{stats[card.key] ?? 0}</div>
-          <div class="text-xs font-medium">{card.label}</div>
-        </a>
-      {/each}
+          <Clock size={26} />
+          <div class="text-3xl font-bold mt-1">{stats.pendingApps ?? 0}</div>
+          <div class="text-xs font-medium flex items-center justify-between">
+            Pending Applications
+            {#if showPendingDropdown}<ChevronUp size={12} />{:else}<ChevronDown size={12} />{/if}
+          </div>
+        </button>
+        {#if showPendingDropdown}
+          <div class="absolute top-full left-0 mt-1 z-30 bg-white border border-slate-200 rounded-xl shadow-lg w-72 max-h-64 overflow-y-auto">
+            <div class="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-600">Pending Applicants</span>
+              <a href="/applications?status=pending" class="text-xs text-[#0A1F44] hover:underline">View all →</a>
+            </div>
+            {#if recentPending.length === 0}
+              <p class="text-xs text-slate-400 px-3 py-4 text-center">No pending applications</p>
+            {:else}
+              {#each recentPending as app}
+                <div class="px-3 py-2 border-b border-slate-50 hover:bg-amber-50 transition-colors">
+                  <div class="text-xs font-medium text-slate-800">{app.full_name}</div>
+                  <div class="text-xs text-slate-400 truncate">{app.program_title}</div>
+                </div>
+              {/each}
+            {/if}
+          </div>
+        {/if}
+      </div>
+
+      <!-- Total Beneficiaries -->
+      <a
+        href="/beneficiaries"
+        class="card border border-[#0A1F44]/15 bg-[#0A1F44]/10 text-[#0A1F44] flex flex-col gap-1
+               no-underline hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer"
+      >
+        <Users size={26} />
+        <div class="text-3xl font-bold mt-1">{stats.approvedBeneficiaries ?? 0}</div>
+        <div class="text-xs font-medium">Total Beneficiaries</div>
+      </a>
+
+      <!-- Rejected Applications — clickable, shows dropdown list -->
+      <div class="relative">
+        <button
+          onclick={() => { showRejectedDropdown = !showRejectedDropdown; showPendingDropdown = false; }}
+          class="card border border-red-100 bg-red-50 text-red-700 flex flex-col gap-1 w-full text-left
+                 hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer"
+        >
+          <XCircle size={26} />
+          <div class="text-3xl font-bold mt-1">{stats.rejectedApps ?? 0}</div>
+          <div class="text-xs font-medium flex items-center justify-between">
+            Rejected Applications
+            {#if showRejectedDropdown}<ChevronUp size={12} />{:else}<ChevronDown size={12} />{/if}
+          </div>
+        </button>
+        {#if showRejectedDropdown}
+          <div class="absolute top-full left-0 mt-1 z-30 bg-white border border-slate-200 rounded-xl shadow-lg w-72 max-h-64 overflow-y-auto">
+            <div class="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-600">Rejected Applicants</span>
+              <a href="/applications?status=rejected" class="text-xs text-[#0A1F44] hover:underline">View all →</a>
+            </div>
+            {#if rejectedApps.length === 0}
+              <p class="text-xs text-slate-400 px-3 py-4 text-center">No rejected applications</p>
+            {:else}
+              {#each rejectedApps as app}
+                <div class="px-3 py-2 border-b border-slate-50 hover:bg-red-50 transition-colors">
+                  <div class="text-xs font-medium text-slate-800">{app.full_name}</div>
+                  <div class="text-xs text-slate-400 truncate">{app.program_title}</div>
+                </div>
+              {/each}
+            {/if}
+          </div>
+        {/if}
+      </div>
+
     </div>
 
     <!-- ── Main Grid ── -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-      <!-- Recent Pending Applications (spans 2 cols) -->
+      <!-- Recent Pending — grouped per program -->
       <div class="card lg:col-span-2">
         <div class="flex items-center justify-between mb-4">
           <h2 class="font-semibold text-gray-800 flex items-center gap-2">
@@ -186,34 +281,44 @@
           </a>
         </div>
 
-        {#if recentPending.length === 0}
+        {#if pendingGroups.length === 0}
           <p class="text-gray-400 text-sm py-6 text-center">No pending applications</p>
         {:else}
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="text-left text-gray-500 border-b border-gray-100">
-                  <th class="pb-2 font-medium">Name</th>
-                  <th class="pb-2 font-medium">Program</th>
-                  <th class="pb-2 font-medium">Date</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-50">
-                {#each recentPending as app}
-                  <tr
-                    class="hover:bg-amber-50 cursor-pointer transition-colors"
-                    onclick={() => window.location.href = `/applications/${app.id}`}
-                    role="link"
-                    tabindex="0"
-                    onkeydown={(e) => e.key === 'Enter' && (window.location.href = `/applications/${app.id}`)}
-                  >
-                    <td class="py-2.5 font-medium">{app.full_name}</td>
-                    <td class="py-2.5 text-gray-500 text-xs">{app.program_title}</td>
-                    <td class="py-2.5 text-gray-400 text-xs whitespace-nowrap">{fmtDate(app.created_at)}</td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
+          <div class="space-y-2">
+            {#each pendingGroups as group, i}
+              <div class="border border-slate-100 rounded-xl overflow-hidden">
+                <!-- Program header row -->
+                <button
+                  type="button"
+                  onclick={() => toggleGroup(i)}
+                  class="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50 hover:bg-amber-50 transition-colors text-left"
+                >
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-xs font-semibold text-slate-700 truncate">{group.program_title}</span>
+                    <span class="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                      {group.applicants.length}
+                    </span>
+                  </div>
+                  {#if group.expanded}
+                    <ChevronUp size={14} class="text-slate-400 shrink-0" />
+                  {:else}
+                    <ChevronDown size={14} class="text-slate-400 shrink-0" />
+                  {/if}
+                </button>
+
+                <!-- Applicants list (collapsible) -->
+                {#if group.expanded}
+                  <div class="divide-y divide-slate-50">
+                    {#each group.applicants as app}
+                      <div class="flex items-center justify-between px-4 py-2">
+                        <span class="text-sm text-slate-700">{app.full_name}</span>
+                        <span class="text-xs text-slate-400 whitespace-nowrap">{fmtDate(app.created_at)}</span>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {/each}
           </div>
         {/if}
       </div>
@@ -263,7 +368,7 @@
           <h2 class="font-semibold text-gray-800 flex items-center gap-2">
             <AlertTriangle size={16} class="text-orange-500" /> Programs Nearly Full
           </h2>
-          <a href="/programs?filter=nearly-full" class="text-xs font-medium hover:underline" style="color:#0A1F44;">
+          <a href="/programs" class="text-xs font-medium hover:underline" style="color:#0A1F44;">
             View all →
           </a>
         </div>
@@ -283,7 +388,7 @@
                   <span class="font-medium truncate flex-1 mr-2 text-gray-800 group-hover:text-orange-700 transition-colors">
                     {p.title}
                   </span>
-                  <span class="text-gray-500 shrink-0">{p.slots_used}/{p.slots} slots</span>
+                  <span class="text-gray-500 shrink-0">{p.slots_used}/{p.slots}</span>
                 </div>
                 <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div

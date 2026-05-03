@@ -160,7 +160,7 @@
           <input
             bind:value={form.email}
             type="email"
-            placeholder="Email Address *"
+            placeholder="Email Address "
             onfocus={focusBorder}
             onblur={blurBorder}
             class="w-full rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition"

@@ -50,15 +50,15 @@
 
     <img src="/logo.png" alt="SK Logo" class="w-35 h-35 object-contain mb-3 opacity-95" />
     <h1 class="text-white text-base font-bold tracking-wide mb-0 text-center">
-      SK Personnel Portal
+      SK Beneficiary Management Portal
     </h1>
     <p class="text-white/60 text-sm mb-4 text-center">
-      Authorized SK Officials Only
+      Authorized Access Only
     </p>
 
     <div class="w-full border rounded-2xl px-8 py-8"
          style="background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.10);">
-      <p class="text-white/60 text-xs font-semibold uppercase tracking-widest mb-5">SK Personnel Login</p>
+      <p class="text-white/60 text-xs font-semibold uppercase tracking-widest mb-5">SK Portal Login</p>
 
       <form onsubmit={(e) => { e.preventDefault(); handleLogin(); }} class="space-y-3">
 

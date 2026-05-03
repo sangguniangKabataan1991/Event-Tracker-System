@@ -9,7 +9,11 @@
 		ArrowLeft,
 		CheckCircle2,
 		AlertCircle,
-		Loader2
+		Loader2,
+		FileText,
+		ImageIcon,
+		Paperclip,
+		X
 	} from 'lucide-svelte';
 
 	interface Program {
@@ -24,6 +28,7 @@
 	let submitting = $state(false);
 	let error = $state('');
 	let success = $state(false);
+	let attachedFiles = $state<File[]>([]);
 
 	let form = $state({
 		full_name: '',
@@ -33,6 +38,10 @@
 		barangay: '',
 		requirements_submitted: ''
 	});
+
+	let requirementsValid = $derived(
+		form.requirements_submitted.trim().length > 0 || attachedFiles.length > 0
+	);
 
 	onMount(async () => {
 		if (!$user) {
@@ -49,9 +58,43 @@
 		}
 	});
 
+	function handleContactInput(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		input.value = input.value.replace(/\D/g, '').slice(0, 11);
+		form.contact = input.value;
+	}
+
+	function handleFileChange(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		if (input.files) {
+			attachedFiles = [...attachedFiles, ...Array.from(input.files)];
+			input.value = '';
+		}
+	}
+
+	function removeFile(index: number) {
+		attachedFiles = attachedFiles.filter((_, i) => i !== index);
+	}
+
+	function formatFileSize(bytes: number) {
+		if (bytes < 1024) return bytes + ' B';
+		if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+		return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+	}
+
+	function isImage(file: File) {
+		return file.type.startsWith('image/');
+	}
+
 	async function submitApplication() {
-		submitting = true;
 		error = '';
+
+		if (!form.requirements_submitted.trim() && attachedFiles.length === 0) {
+			error = 'Please provide requirements — enter text or attach at least one file.';
+			return;
+		}
+
+		submitting = true;
 		try {
 			await apiFetch('/applications', {
 				method: 'POST',
@@ -121,10 +164,7 @@
 				style="background: rgba(10,31,68,0.05); border-color: rgba(10,31,68,0.15);"
 			>
 				<div class="flex items-start gap-3">
-					<div
-						class="shrink-0 rounded-lg p-2"
-						style="background: rgba(10,31,68,0.10); color: #0A1F44;"
-					>
+					<div class="shrink-0 rounded-lg p-2" style="background: rgba(10,31,68,0.10); color: #0A1F44;">
 						<ClipboardList class="h-5 w-5" />
 					</div>
 					<div>
@@ -141,17 +181,13 @@
 
 		<div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 			<h1 class="mb-1 text-lg font-bold text-slate-900">Application Form</h1>
-			<p class="mb-5 text-sm text-slate-500">
-				Please fill out all fields correctly and completely.
-			</p>
+			<p class="mb-5 text-sm text-slate-500">Please fill out all fields correctly and completely.</p>
 
 			<form
-				onsubmit={(e) => {
-					e.preventDefault();
-					submitApplication();
-				}}
+				onsubmit={(e) => { e.preventDefault(); submitApplication(); }}
 				class="space-y-4"
 			>
+				<!-- Full Name -->
 				<div>
 					<label class="label" for="fn">Full Name *</label>
 					<input
@@ -159,10 +195,10 @@
 						bind:value={form.full_name}
 						class="input"
 						required
-						placeholder="e.g. Juan Dela Cruz"
 					/>
 				</div>
 
+				<!-- Age + Contact -->
 				<div class="grid grid-cols-2 gap-3">
 					<div>
 						<label class="label" for="age">Age *</label>
@@ -172,23 +208,28 @@
 							type="number"
 							class="input"
 							required
-							placeholder="e.g. 18"
 							min="1"
 							max="30"
 						/>
 					</div>
 					<div>
-						<label class="label" for="contact">Contact Number *</label>
+						<label class="label" for="contact">
+							Contact Number *
+							<span class="ml-auto font-normal text-slate-400"></span>
+						</label>
 						<input
 							id="contact"
 							bind:value={form.contact}
 							class="input"
 							required
-							placeholder="e.g. 09XXXXXXXXX"
+							inputmode="numeric"
+							maxlength="11"
+							oninput={handleContactInput}
 						/>
 					</div>
 				</div>
 
+				<!-- Barangay -->
 				<div>
 					<label class="label" for="barangay">Barangay *</label>
 					<input
@@ -196,10 +237,10 @@
 						bind:value={form.barangay}
 						class="input"
 						required
-						placeholder="e.g. Barangay 123"
 					/>
 				</div>
 
+				<!-- Address -->
 				<div>
 					<label class="label" for="address">Address *</label>
 					<input
@@ -207,25 +248,76 @@
 						bind:value={form.address}
 						class="input"
 						required
-						placeholder="e.g. Blk/Lot, Street, Barangay, Lungsod"
 					/>
 				</div>
 
+				<!-- Requirements -->
 				<div>
-					<label class="label" for="req">Requirements *</label>
-					<textarea
-						id="req"
-						bind:value={form.requirements_submitted}
-						class="input h-20 resize-none"
-            required
-						placeholder="e.g. Photocopy ng report card, Barangay certificate..."
-					></textarea>
+					<label class="label" for="req">
+						Requirements *
+					</label>
+
+					<div
+						class="overflow-hidden rounded-lg border transition focus-within:border-slate-400"
+						class:border-slate-200={requirementsValid}
+						class:border-red-300={!requirementsValid && error !== ''}
+					>
+						<textarea
+							id="req"
+							bind:value={form.requirements_submitted}
+							rows={3}
+							class="w-full resize-none border-none px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none"
+						></textarea>
+
+						<div class="border-t border-slate-100"></div>
+
+						<!-- Attached files list -->
+						{#if attachedFiles.length > 0}
+							<ul class="flex flex-col gap-1 px-3 py-2">
+								{#each attachedFiles as file, i}
+									<li class="flex items-center justify-between rounded-md bg-slate-50 px-2.5 py-1.5">
+										<div class="flex min-w-0 items-center gap-2">
+											{#if isImage(file)}
+												<ImageIcon size={13} class="shrink-0 text-slate-400" />
+											{:else}
+												<FileText size={13} class="shrink-0 text-slate-400" />
+											{/if}
+											<span class="truncate text-xs text-slate-700">{file.name}</span>
+											<span class="shrink-0 text-xs text-slate-400">{formatFileSize(file.size)}</span>
+										</div>
+										<button
+											type="button"
+											onclick={() => removeFile(i)}
+											class="ml-2 shrink-0 rounded p-0.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"
+										>
+											<X size={12} />
+										</button>
+									</li>
+								{/each}
+							</ul>
+							<div class="border-t border-slate-100"></div>
+						{/if}
+
+						<!-- Toolbar -->
+						<div class="flex items-center px-3 py-2">
+							<label class="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition hover:text-slate-600">
+								<Paperclip size={13} />
+								Attach file or image
+								<input
+									type="file"
+									multiple
+									accept="image/*,.pdf"
+									class="hidden"
+									onchange={handleFileChange}
+								/>
+							</label>
+							<span class="ml-auto text-xs text-slate-300">PNG, JPG, PDF</span>
+						</div>
+					</div>
 				</div>
 
 				{#if error}
-					<div
-						class="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700"
-					>
+					<div class="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
 						<AlertCircle class="h-4 w-4 shrink-0" />
 						{error}
 					</div>
@@ -245,7 +337,7 @@
 					>
 						{#if submitting}
 							<Loader2 class="h-4 w-4 animate-spin" />
-							Isinusumite...
+							Submitting...
 						{:else}
 							Submit Application
 						{/if}

@@ -252,11 +252,12 @@
           <!-- Requirements -->
           <div class="space-y-1.5">
             <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 uppercase tracking-wide" for="req">
-              <ListChecks size={11} /> Requirements
+              <ListChecks size={11} /> Requirements <span class="text-red-400">*</span>
             </label>
             <textarea
               id="req"
               bind:value={form.requirements}
+              required
               placeholder="List of requirements for applicants..."
               rows="3"
               class="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition bg-slate-50 resize-none"
