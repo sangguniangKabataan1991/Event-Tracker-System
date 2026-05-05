@@ -1,644 +1,584 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { apiFetch } from '$lib/api';
-	import * as XLSX from 'xlsx';
-	import FileSpreadsheet from 'lucide-svelte/icons/file-spreadsheet';
-	import PenLine from 'lucide-svelte/icons/pen-line';
-	import Upload from 'lucide-svelte/icons/upload';
-	import Download from 'lucide-svelte/icons/download';
-	import X from 'lucide-svelte/icons/x';
-	import UserCheck from 'lucide-svelte/icons/user-check';
-	import AlertTriangle from 'lucide-svelte/icons/alert-triangle';
-	import SlidersHorizontal from 'lucide-svelte/icons/sliders-horizontal';
-	import Search from 'lucide-svelte/icons/search';
-	import Users from 'lucide-svelte/icons/users';
+  import { onMount } from 'svelte';
+  import { page } from '$app/state';
+  import { apiFetch } from '$lib/api';
+  import PenLine from 'lucide-svelte/icons/pen-line';
+  import X from 'lucide-svelte/icons/x';
+  import UserCheck from 'lucide-svelte/icons/user-check';
+  import AlertTriangle from 'lucide-svelte/icons/alert-triangle';
+  import SlidersHorizontal from 'lucide-svelte/icons/sliders-horizontal';
+  import Search from 'lucide-svelte/icons/search';
+  import Users from 'lucide-svelte/icons/users';
+  import History from 'lucide-svelte/icons/history';
+  import List from 'lucide-svelte/icons/list';
+  import Phone from 'lucide-svelte/icons/phone';
+  import MapPin from 'lucide-svelte/icons/map-pin';
+  import ChevronRight from 'lucide-svelte/icons/chevron-right';
+  import FileDown from 'lucide-svelte/icons/file-down';
+  import * as XLSX from 'xlsx';
 
-	interface Beneficiary {
-		id: string | number;
-		full_name: string;
-		address: string;
-		contact: string;
-		program_id: string | number;
-		program_title: string;
-		category: string;
-		received_at: string;
-	}
-	interface Program {
-		id: string | number;
-		title: string;
-	}
+  interface Beneficiary {
+    id: string | number;
+    full_name: string;
+    address: string;
+    contact: string;
+    program_id: string | number;
+    program_title: string;
+    category: string;
+    received_at: string;
+    age?: number;
+    barangay?: string;
+    notes?: string;
+  }
+  interface Program { id: string | number; title: string; }
+  interface BenefitRecord {
+    id: string | number;
+    program_title: string;
+    category: string;
+    status: string;
+    created_at: string;
+    received_at?: string;
+  }
+  interface SearchResult {
+    full_name: string;
+    address: string;
+    records: BenefitRecord[];
+  }
+  interface ProfileDetail {
+    full_name: string;
+    address: string;
+    contact: string;
+    age?: number;
+    barangay?: string;
+    notes?: string;
+    records: BenefitRecord[];
+  }
 
-	let beneficiaries = $state<Beneficiary[]>([]);
-	let programs = $state<Program[]>([]);
-	let filterProgram = $state('');
-	let search = $state('');
-	let loading = $state(true);
+  let activeTab = $state<'list' | 'search'>('list');
 
-	// ── Manual Encode Modal State ──
-	let showManualForm = $state(false);
-	let manualForm = $state({
-		full_name: '',
-		address: '',
-		age: '',
-		contact: '',
-		barangay: '',
-		notes: '',
-		program_id: ''
-	});
-	let manualLoading = $state(false);
-	let manualError = $state('');
-	let manualSuccess = $state('');
-	let manualWarning = $state('');
+  let beneficiaries  = $state<Beneficiary[]>([]);
+  let programs       = $state<Program[]>([]);
+  let filterProgram  = $state('');
+  let search         = $state('');
+  let loading        = $state(true);
 
-	// ── Excel Import Modal State ──
-	let showImportModal = $state(false);
-	let importProgramId = $state('');
-	let importLoading = $state(false);
-	let importError = $state('');
-	let importSuccess = $state('');
-	let importWarnings = $state<string[]>([]);
-	let importPreview = $state<any[]>([]);
-	let importSkipped = $state<string[]>([]);
-	let fileInput = $state<HTMLInputElement | undefined>(undefined);
+  // ── Search / History ──
+  let searchQuery   = $state('');
+  let searchResults = $state<SearchResult[]>([]);
+  let searchLoading = $state(false);
+  let searchError   = $state('');
+  let searchDone    = $state(false);
 
-	// Load beneficiaries and programs on mount
-	onMount(async () => {
-		[beneficiaries, programs] = await Promise.all([
-			apiFetch('/beneficiaries'),
-			apiFetch('/programs')
-		]);
-		loading = false;
-	});
+  // ── Profile Modal ──
+  let showProfile    = $state(false);
+  let profileData    = $state<ProfileDetail | null>(null);
+  let profileLoading = $state(false);
+  let dialogEl       = $state<HTMLDialogElement | undefined>(undefined);
 
-	// Re-fetch the beneficiary list after any mutation
-	async function reloadBeneficiaries() {
-		beneficiaries = await apiFetch('/beneficiaries');
-	}
+  // ── Manual Encode ──
+  let showManualForm = $state(false);
+  let manualForm     = $state({ full_name:'', address:'', age:'', contact:'', barangay:'', notes:'', program_id:'' });
+  let manualLoading  = $state(false);
+  let manualError    = $state('');
+  let manualSuccess  = $state('');
+  let manualWarning  = $state('');
 
-	// ── MANUAL ENCODE ──────────────────────────────────────────────────────
-	async function submitManual() {
-		if (
-			!manualForm.program_id ||
-			!manualForm.full_name ||
-			!manualForm.address ||
-			!manualForm.contact
-		) {
-			manualError = 'Please fill in all required fields (*)';
-			return;
-		}
+  onMount(async () => {
+    [beneficiaries, programs] = await Promise.all([
+      apiFetch('/beneficiaries'),
+      apiFetch('/programs')
+    ]);
+    loading = false;
 
-		manualLoading = true;
-		manualError = '';
-		manualSuccess = '';
-		manualWarning = '';
+    const tabParam = page.url.searchParams.get('tab');
+    const qParam   = page.url.searchParams.get('q') ?? '';
+    if (tabParam === 'search') {
+      activeTab = 'search';
+      if (qParam) { searchQuery = qParam; await runSearch(); }
+    }
+  });
 
-		try {
-			const res = await apiFetch('/beneficiaries/manual', {
-				method: 'POST',
-				body: {
-					program_id: manualForm.program_id,
-					full_name: manualForm.full_name,
-					address: manualForm.address,
-					age: parseInt(manualForm.age) || 0,
-					contact: manualForm.contact,
-					barangay: manualForm.barangay,
-					notes: manualForm.notes
-				}
-			});
+  async function reloadBeneficiaries() {
+    beneficiaries = await apiFetch('/beneficiaries');
+  }
 
-			manualSuccess = res.message;
-			if (res.warning) manualWarning = res.warning;
+  // ── Profile Modal ──────────────────────────────────────────────────────
+  async function openProfile(b: Beneficiary) {
+    showProfile = true;
+    profileLoading = true;
+    profileData = null;
+    // Open the native <dialog> for proper focus trapping
+    dialogEl?.showModal();
+    try {
+      profileData = await apiFetch(`/beneficiaries/${b.id}/profile`);
+    } catch {
+      profileData = { full_name: b.full_name, address: b.address, contact: b.contact, age: b.age, barangay: b.barangay, notes: b.notes, records: [] };
+    } finally {
+      profileLoading = false;
+    }
+  }
 
-			// Reset form fields but keep the selected program
-			manualForm = {
-				full_name: '',
-				address: '',
-				age: '',
-				contact: '',
-				barangay: '',
-				notes: '',
-				program_id: manualForm.program_id
-			};
+  function closeProfile() {
+    dialogEl?.close();
+    showProfile = false;
+    profileData = null;
+  }
 
-			await reloadBeneficiaries();
-		} catch (e) {
-			manualError = e instanceof Error ? e.message : 'An error occurred';
-		} finally {
-			manualLoading = false;
-		}
-	}
+  function handleDialogKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') closeProfile();
+  }
 
-	// ── EXCEL IMPORT ───────────────────────────────────────────────────────
+  // ── Export per program ─────────────────────────────────────────────────
+  function exportProgram(programTitle: string, items: Beneficiary[]) {
+    const rows = items.map((b, i) => ({
+      '#': i + 1,
+      'Full Name': b.full_name,
+      'Address':   b.address,
+      'Contact':   b.contact,
+      'Barangay':  b.barangay || '',
+      'Age':       b.age || '',
+      'Received At': b.received_at ? new Date(b.received_at).toLocaleDateString('en-PH') : ''
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Beneficiaries');
+    XLSX.writeFile(wb, `Beneficiaries_${programTitle.replace(/[^a-z0-9]/gi, '_')}.xlsx`);
+  }
 
-	// Parse uploaded Excel/CSV file and build a preview array
-	function handleFileUpload(event: Event) {
-		const file = (event.target as HTMLInputElement).files?.[0];
-		if (!file) return;
+  // ── Search / History ──────────────────────────────────────────────────
+  async function runSearch() {
+    if (!searchQuery.trim()) return;
+    searchLoading = true; searchError = ''; searchDone = false;
+    try {
+      // Backend uses ?q= param (updated in beneficiaries.js)
+      searchResults = await apiFetch(`/beneficiaries/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      searchDone = true;
+    } catch (e) {
+      searchError = e instanceof Error ? e.message : 'Search failed';
+    } finally {
+      searchLoading = false;
+    }
+  }
 
-		importError = '';
-		importPreview = [];
+  function handleSearchKey(e: KeyboardEvent) { if (e.key === 'Enter') runSearch(); }
 
-		const reader = new FileReader();
-		reader.onload = (e) => {
-			try {
-				const data = new Uint8Array(e.target?.result as ArrayBuffer);
-				const workbook = XLSX.read(data, { type: 'array' });
-				const sheet = workbook.Sheets[workbook.SheetNames[0]];
-				const rows = XLSX.utils.sheet_to_json(sheet) as any[];
+  function statusBadgeClass(status: string) {
+    if (status === 'approved') return 'bg-emerald-100 text-emerald-700';
+    if (status === 'rejected') return 'bg-red-100 text-red-700';
+    if (status === 'pending')  return 'bg-amber-100 text-amber-700';
+    if (status === 'waitlist') return 'bg-blue-100 text-blue-700';
+    return 'bg-gray-100 text-gray-500';
+  }
 
-				if (rows.length === 0) {
-					importError = 'The uploaded file contains no data.';
-					return;
-				}
+  function fmtDate(d: string) {
+    return new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
 
-				// Map columns flexibly — supports various common header names
-				importPreview = rows
-					.map((row) => ({
-						full_name: row['Full Name'] || row['full_name'] || row['Name'] || row['name'] || '',
-						address: row['Address'] || row['address'] || '',
-						age: row['Age'] || row['age'] || '',
-						contact: row['Contact'] || row['contact'] || row['Contact Number'] || '',
-						barangay: row['Barangay'] || row['barangay'] || ''
-					}))
-					.filter((r) => r.full_name); // Skip rows with no name
+  // ── Manual Encode ──────────────────────────────────────────────────────
+  async function submitManual() {
+    if (!manualForm.program_id || !manualForm.full_name || !manualForm.address || !manualForm.contact) {
+      manualError = 'Please fill in all required fields (*)'; return;
+    }
+    manualLoading = true; manualError = ''; manualSuccess = ''; manualWarning = '';
+    try {
+      const res = await apiFetch('/beneficiaries/manual', {
+        method: 'POST',
+        body: { program_id: manualForm.program_id, full_name: manualForm.full_name, address: manualForm.address, age: parseInt(manualForm.age) || 0, contact: manualForm.contact, barangay: manualForm.barangay, notes: manualForm.notes }
+      });
+      manualSuccess = res.message;
+      if (res.warning) manualWarning = res.warning;
+      manualForm = { full_name:'', address:'', age:'', contact:'', barangay:'', notes:'', program_id: manualForm.program_id };
+      await reloadBeneficiaries();
+    } catch (e) {
+      manualError = e instanceof Error ? e.message : 'An error occurred';
+    } finally {
+      manualLoading = false;
+    }
+  }
 
-				if (importPreview.length === 0) {
-					importError =
-						'No valid records found. Make sure the file has columns: "Full Name", "Address", "Contact".';
-				}
-			} catch {
-				importError = 'Could not read the file. Please make sure it is a valid .xlsx or .xls file.';
-			}
-		};
-		reader.readAsArrayBuffer(file);
-	}
+  // ── Derived list ──
+  let filtered = $derived(
+    beneficiaries.filter(b => {
+      const matchProgram = !filterProgram || b.program_id == filterProgram;
+      const matchSearch  = !search || b.full_name.toLowerCase().includes(search.toLowerCase());
+      return matchProgram && matchSearch;
+    })
+  );
 
-	// Send the parsed preview data to the backend for bulk import
-	async function submitImport() {
-		if (!importProgramId) {
-			importError = 'Please select a program';
-			return;
-		}
-		if (importPreview.length === 0) {
-			importError = 'No data to import';
-			return;
-		}
-
-		importLoading = true;
-		importError = '';
-		importSuccess = '';
-		importWarnings = [];
-		importSkipped = [];
-
-		try {
-			const res = await apiFetch('/beneficiaries/bulk-import', {
-				method: 'POST',
-				body: { program_id: importProgramId, beneficiaries: importPreview }
-			});
-
-			importSuccess = res.message;
-			importWarnings = res.warnings || [];
-			importSkipped = res.skippedNames || [];
-			importPreview = [];
-			if (fileInput) fileInput.value = '';
-
-			await reloadBeneficiaries();
-		} catch (e) {
-			importError = e instanceof Error ? e.message : 'Import failed';
-		} finally {
-			importLoading = false;
-		}
-	}
-
-	// Generate and download a blank Excel template for bulk import
-	function downloadTemplate() {
-		const template = [
-			{
-				'Full Name': 'Juan Dela Cruz',
-				Address: 'Blk 1 Lot 2, Sample St.',
-				Age: 18,
-				Contact: '09123456789',
-				Barangay: 'Sto. Nino'
-			},
-			{
-				'Full Name': 'Maria Santos',
-				Address: 'Blk 3 Lot 4, Sample St.',
-				Age: 20,
-				Contact: '09987654321',
-				Barangay: 'Sto. Nino'
-			}
-		];
-		const ws = XLSX.utils.json_to_sheet(template);
-		const wb = XLSX.utils.book_new();
-		XLSX.utils.book_append_sheet(wb, ws, 'Beneficiaries');
-		XLSX.writeFile(wb, 'SK_Beneficiary_Template.xlsx');
-	}
-
-	// Filter beneficiaries by program and search term
-	let filtered = $derived(
-		beneficiaries.filter((b) => {
-			const matchProgram = !filterProgram || b.program_id == filterProgram;
-			const matchSearch = !search || b.full_name.toLowerCase().includes(search.toLowerCase());
-			return matchProgram && matchSearch;
-		})
-	);
-
-	// Group filtered beneficiaries by program title for display
-	let grouped = $derived(
-		filtered.reduce<Record<string, { category: string; items: Beneficiary[] }>>((acc, b) => {
-			const key = b.program_title || 'Unknown';
-			if (!acc[key]) acc[key] = { category: b.category, items: [] };
-			acc[key].items.push(b);
-			return acc;
-		}, {})
-	);
+  let grouped = $derived(
+    filtered.reduce<Record<string, { category: string; items: Beneficiary[] }>>((acc, b) => {
+      const key = b.program_title || 'Unknown';
+      if (!acc[key]) acc[key] = { category: b.category, items: [] };
+      acc[key].items.push(b);
+      return acc;
+    }, {})
+  );
 </script>
 
+<!-- ── Profile Modal — uses native <dialog> for built-in focus trap + a11y ── -->
+<dialog
+  bind:this={dialogEl}
+  onkeydown={handleDialogKeydown}
+  class="p-0 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] backdrop:bg-black/40 backdrop:backdrop-blur-sm open:flex open:flex-col"
+  style="border:none;"
+>
+  {#if showProfile}
+    <!-- Modal Header -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+      <h2 class="font-bold text-gray-900 text-lg">Beneficiary Profile</h2>
+      <button onclick={closeProfile} class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition">
+        <X size={18} />
+      </button>
+    </div>
+
+    <div class="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+      {#if profileLoading}
+        <div class="flex items-center gap-2 text-gray-400 text-sm py-8 justify-center">
+          <div class="w-4 h-4 border-2 border-gray-200 rounded-full animate-spin" style="border-top-color:#0A1F44;"></div>
+          Loading profile...
+        </div>
+      {:else if profileData}
+        <!-- Avatar + Name -->
+        <div class="flex items-center gap-4">
+          <div class="w-14 h-14 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-xl font-bold shrink-0">
+            {profileData.full_name.charAt(0)}
+          </div>
+          <div>
+            <div class="text-xl font-bold text-gray-900">{profileData.full_name}</div>
+            {#if profileData.barangay}
+              <div class="text-sm text-gray-400">{profileData.barangay}</div>
+            {/if}
+          </div>
+        </div>
+
+        <!-- Contact Details -->
+        <div class="grid grid-cols-1 gap-2.5">
+          <div class="flex items-start gap-3 bg-gray-50 rounded-xl px-4 py-3">
+            <MapPin size={15} class="mt-0.5 shrink-0 text-gray-400" />
+            <div>
+              <div class="text-xs text-gray-400 font-medium mb-0.5">Address</div>
+              <div class="text-sm text-gray-800">{profileData.address}</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3">
+            <Phone size={15} class="shrink-0 text-gray-400" />
+            <div>
+              <div class="text-xs text-gray-400 font-medium mb-0.5">Contact</div>
+              <div class="text-sm text-gray-800">{profileData.contact || '—'}</div>
+            </div>
+          </div>
+          {#if profileData.age}
+            <div class="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3">
+              <UserCheck size={15} class="shrink-0 text-gray-400" />
+              <div>
+                <div class="text-xs text-gray-400 font-medium mb-0.5">Age</div>
+                <div class="text-sm text-gray-800">{profileData.age} years old</div>
+              </div>
+            </div>
+          {/if}
+          {#if profileData.notes}
+            <div class="flex items-start gap-3 bg-yellow-50 border border-yellow-100 rounded-xl px-4 py-3">
+              <AlertTriangle size={15} class="mt-0.5 shrink-0 text-yellow-500" />
+              <div>
+                <div class="text-xs text-yellow-600 font-medium mb-0.5">Notes</div>
+                <div class="text-sm text-gray-800">{profileData.notes}</div>
+              </div>
+            </div>
+          {/if}
+        </div>
+
+        <!-- Benefit History -->
+        <div>
+          <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <History size={15} class="text-gray-400" />
+            Benefit History
+            <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-[#0A1F44]/10 text-[#0A1F44]">
+              {profileData.records.length} record{profileData.records.length !== 1 ? 's' : ''}
+            </span>
+          </h3>
+          {#if profileData.records.length === 0}
+            <div class="text-center py-6 text-gray-400">
+              <History size={24} class="mx-auto mb-1 text-gray-300" />
+              <p class="text-sm">No benefit records yet</p>
+            </div>
+          {:else}
+            <div class="space-y-2">
+              {#each profileData.records as rec}
+                <div class="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3 gap-3">
+                  <div class="min-w-0">
+                    <div class="text-sm font-medium truncate">{rec.program_title}</div>
+                    <div class="text-xs text-gray-400">{rec.category} · {fmtDate(rec.created_at)}</div>
+                  </div>
+                  <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full shrink-0 {statusBadgeClass(rec.status)}">
+                    {rec.status}
+                  </span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
+</dialog>
+
 <div class="space-y-5 p-6">
-	<!-- Page Header -->
-	<div class="flex flex-wrap items-start justify-between gap-3">
-		<div>
-			<h1 class="text-2xl font-bold text-gray-900">Beneficiaries</h1>
-			<p class="text-sm text-gray-500">Complete list of all approved benefit recipients</p>
-		</div>
-		<div class="flex gap-2">
-			<button
-				class="btn-ghost flex items-center gap-1.5"
-				onclick={() => {
-					showImportModal = true;
-					showManualForm = false;
-				}}
-			>
-				<FileSpreadsheet size={15} /> Import Excel
-			</button>
-			<button
-				class="btn-primary flex items-center gap-1.5"
-				onclick={() => {
-					showManualForm = true;
-					showImportModal = false;
-				}}
-			>
-				<PenLine size={15} /> Manual Encode
-			</button>
-		</div>
-	</div>
 
-	<!-- ── MANUAL ENCODE FORM ───────────────────────────────────────────── -->
-	{#if showManualForm}
-		<div class="card border-2 border-blue-200 bg-blue-50/30">
-			<!-- Form Header -->
-			<div class="mb-4 flex items-center justify-between">
-				<h2 class="flex items-center gap-2 font-bold text-gray-900">
-					<PenLine size={16} class="text-[#0A1F44]" /> Manual Beneficiary Entry
-				</h2>
-				<button
-					onclick={() => {
-						showManualForm = false;
-						manualError = '';
-						manualSuccess = '';
-						manualWarning = '';
-					}}
-					class="text-gray-400 transition hover:text-gray-600"
-				>
-					<X size={18} />
-				</button>
-			</div>
+  <!-- Page Header -->
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Beneficiaries</h1>
+      <p class="text-sm text-gray-500">Complete list of approved recipients and benefit history</p>
+    </div>
+    {#if activeTab === 'list'}
+      <button class="btn-primary flex items-center gap-1.5" onclick={() => { showManualForm = true; }}>
+        <PenLine size={15} /> Manual Encode
+      </button>
+    {/if}
+  </div>
 
-			<!-- Status Messages -->
-			{#if manualSuccess}
-				<div
-					class="mb-3 flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
-				>
-					<UserCheck size={15} class="mt-0.5 shrink-0" />
-					{manualSuccess}
-				</div>
-			{/if}
-			{#if manualWarning}
-				<div
-					class="mb-3 flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800"
-				>
-					<AlertTriangle size={15} class="mt-0.5 shrink-0" />
-					{manualWarning}
-				</div>
-			{/if}
-			{#if manualError}
-				<div
-					class="mb-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-				>
-					<X size={15} class="mt-0.5 shrink-0" />
-					{manualError}
-				</div>
-			{/if}
+  <!-- Tab Switcher -->
+  <div class="flex border-b border-gray-200">
+    <button
+      onclick={() => { activeTab = 'list'; }}
+      class="flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors
+             {activeTab === 'list' ? 'border-[#0A1F44] text-[#0A1F44]' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+    >
+      <List size={15} /> List view
+    </button>
+    <button
+      onclick={() => { activeTab = 'search'; }}
+      class="flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors
+             {activeTab === 'search' ? 'border-[#0A1F44] text-[#0A1F44]' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+    >
+      <History size={15} /> Search / History
+    </button>
+  </div>
 
-			<!-- Form Fields -->
-			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<div class="md:col-span-2">
-					<label class="label" for="mp">Program *</label>
-					<select id="mp" bind:value={manualForm.program_id} class="input">
-						<option value="">— Select a Program —</option>
-						{#each programs as p}
-							<option value={p.id}>{p.title}</option>
-						{/each}
-					</select>
-				</div>
-				<div>
-					<label class="label" for="mfn">Full Name *</label>
-					<input
-						id="mfn"
-						bind:value={manualForm.full_name}
-						class="input"
-						placeholder="Juan Dela Cruz"
-					/>
-				</div>
-				<div>
-					<label class="label" for="mcontact">Contact Number *</label>
-					<input
-						id="mcontact"
-						bind:value={manualForm.contact}
-						class="input"
-						placeholder="09XXXXXXXXX"
-					/>
-				</div>
-				<div>
-					<label class="label" for="mage">Age</label>
-					<input
-						id="mage"
-						bind:value={manualForm.age}
-						type="number"
-						class="input"
-						placeholder="18"
-						min="1"
-						max="30"
-					/>
-				</div>
-				<div>
-					<label class="label" for="mbrgy">Barangay</label>
-					<input
-						id="mbrgy"
-						bind:value={manualForm.barangay}
-						class="input"
-						placeholder="Barangay name"
-					/>
-				</div>
-				<div class="md:col-span-2">
-					<label class="label" for="maddr">Address *</label>
-					<input
-						id="maddr"
-						bind:value={manualForm.address}
-						class="input"
-						placeholder="Block/Lot, Street, Barangay, City"
-					/>
-				</div>
-				<div class="md:col-span-2">
-					<label class="label" for="mnotes">Notes (optional)</label>
-					<input
-						id="mnotes"
-						bind:value={manualForm.notes}
-						class="input"
-						placeholder="Any additional information..."
-					/>
-				</div>
-			</div>
+  {#if activeTab === 'list'}
 
-			<!-- Form Actions -->
-			<div class="mt-4 flex gap-3">
-				<button
-					class="btn-primary flex flex-1 items-center justify-center gap-2"
-					onclick={submitManual}
-					disabled={manualLoading}
-				>
-					<UserCheck size={15} />
-					{manualLoading ? 'Saving...' : 'Save Beneficiary'}
-				</button>
-				<button
-					class="btn-ghost"
-					onclick={() => {
-						showManualForm = false;
-						manualError = '';
-						manualSuccess = '';
-					}}
-				>
-					Close
-				</button>
-			</div>
-		</div>
-	{/if}
+    <!-- Manual Encode Form -->
+    {#if showManualForm}
+      <div class="card border-2 border-blue-200 bg-blue-50/30">
+        <div class="mb-4 flex items-center justify-between">
+          <h2 class="flex items-center gap-2 font-bold text-gray-900">
+            <PenLine size={16} class="text-[#0A1F44]" /> Manual Beneficiary Entry
+          </h2>
+          <button onclick={() => { showManualForm = false; manualError = ''; manualSuccess = ''; manualWarning = ''; }} class="text-gray-400 transition hover:text-gray-600">
+            <X size={18} />
+          </button>
+        </div>
+        {#if manualSuccess}
+          <div class="mb-3 flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+            <UserCheck size={15} class="mt-0.5 shrink-0" /> {manualSuccess}
+          </div>
+        {/if}
+        {#if manualWarning}
+          <div class="mb-3 flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <AlertTriangle size={15} class="mt-0.5 shrink-0" /> {manualWarning}
+          </div>
+        {/if}
+        {#if manualError}
+          <div class="mb-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <X size={15} class="mt-0.5 shrink-0" /> {manualError}
+          </div>
+        {/if}
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div class="md:col-span-2">
+            <label class="label" for="mp">Program *</label>
+            <select id="mp" bind:value={manualForm.program_id} class="input">
+              <option value="">— Select a Program —</option>
+              {#each programs as p}<option value={p.id}>{p.title}</option>{/each}
+            </select>
+          </div>
+          <div>
+            <label class="label" for="mfn">Full Name *</label>
+            <input id="mfn" bind:value={manualForm.full_name} class="input" />
+          </div>
+          <div>
+            <label class="label" for="mcontact">Contact Number *</label>
+            <input id="mcontact" bind:value={manualForm.contact} class="input" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="11" oninput={(e) => {
+              const target = e.target as HTMLInputElement;
+              manualForm.contact = target.value.replace(/[^0-9]/g, '').slice(0, 11);
+            }} />
+          </div>
+          <div>
+            <label class="label" for="mage">Age</label>
+            <input id="mage" bind:value={manualForm.age} type="number" class="input" min="1" max="30" />
+          </div>
+          <div>
+            <label class="label" for="mbrgy">Barangay</label>
+            <input id="mbrgy" bind:value={manualForm.barangay} class="input" />
+          </div>
+          <div class="md:col-span-2">
+            <label class="label" for="maddr">Address *</label>
+            <input id="maddr" bind:value={manualForm.address} class="input" />
+          </div>
+          <div class="md:col-span-2">
+            <label class="label" for="mnotes">Notes (optional)</label>
+            <input id="mnotes" bind:value={manualForm.notes} class="input" />
+          </div>
+        </div>
+        <div class="mt-4 flex gap-3">
+          <button class="btn-primary flex flex-1 items-center justify-center gap-2" onclick={submitManual} disabled={manualLoading}>
+            <UserCheck size={15} /> {manualLoading ? 'Saving...' : 'Save Beneficiary'}
+          </button>
+          <button class="btn-ghost" onclick={() => { showManualForm = false; manualError = ''; manualSuccess = ''; }}>Close</button>
+        </div>
+      </div>
+    {/if}
 
-	<!-- ── EXCEL IMPORT PANEL ────────────────────────────────────────────── -->
-	{#if showImportModal}
-		<div class="card border-2 border-green-200 bg-green-50/30">
-			<!-- Panel Header -->
-			<div class="mb-4 flex items-center justify-between">
-				<h2 class="flex items-center gap-2 font-bold text-gray-900">
-					<FileSpreadsheet size={16} class="text-green-600" /> Import from Excel
-				</h2>
-				<button
-					onclick={() => {
-						showImportModal = false;
-						importPreview = [];
-						importError = '';
-						importSuccess = '';
-					}}
-					class="text-gray-400 transition hover:text-gray-600"
-				>
-					<X size={18} />
-				</button>
-			</div>
+    <!-- Filters -->
+    <div class="card flex flex-wrap gap-3">
+      <div class="min-w-48 flex-1">
+        <label class="label flex items-center gap-1.5" for="fp">
+          <SlidersHorizontal size={13} class="text-gray-400" /> Filter by Program
+        </label>
+        <select id="fp" bind:value={filterProgram} class="input">
+          <option value="">All Programs</option>
+          {#each programs as p}<option value={p.id}>{p.title}</option>{/each}
+        </select>
+      </div>
+      <div class="min-w-48 flex-1">
+        <label class="label flex items-center gap-1.5" for="fs">
+          <Search size={13} class="text-gray-400" /> Search
+        </label>
+        <input id="fs" bind:value={search} class="input" placeholder="Search by name..." />
+      </div>
+    </div>
 
-			<!-- Status Messages -->
-			{#if importSuccess}
-				<div
-					class="mb-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
-				>
-					<div class="flex items-center gap-2"><UserCheck size={15} /> {importSuccess}</div>
-					{#if importSkipped.length > 0}
-						<div class="mt-1 flex items-center gap-1.5 text-orange-700">
-							<AlertTriangle size={13} /> Skipped (duplicates): {importSkipped.join(', ')}
-						</div>
-					{/if}
-				</div>
-			{/if}
-			{#if importWarnings.length > 0}
-				<div
-					class="mb-3 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800"
-				>
-					<strong class="flex items-center gap-1.5"
-						><AlertTriangle size={14} /> The following have prior benefit history:</strong
-					>
-					<ul class="mt-1 space-y-0.5">
-						{#each importWarnings as w}
-							<li>• {w}</li>
-						{/each}
-					</ul>
-				</div>
-			{/if}
-			{#if importError}
-				<div
-					class="mb-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-				>
-					<X size={14} />
-					{importError}
-				</div>
-			{/if}
+    <!-- List -->
+    {#if loading}
+      <div class="text-sm text-gray-400">Loading beneficiaries...</div>
+    {:else}
+      <div class="text-sm font-medium text-gray-500">
+        {filtered.length} beneficiar{filtered.length === 1 ? 'y' : 'ies'} total
+      </div>
 
-			<div class="space-y-4">
-				<!-- Step 1: Download Template -->
-				<div class="rounded-lg border border-gray-200 bg-white p-4">
-					<div class="flex items-center justify-between">
-						<div>
-							<p class="text-sm font-medium text-gray-800">Step 1 — Download the Excel Template</p>
-							<p class="mt-0.5 text-xs text-gray-500">
-								Use this to ensure your file follows the correct format
-							</p>
-						</div>
-						<button
-							class="btn-ghost flex items-center gap-1.5 text-green-700"
-							onclick={downloadTemplate}
-						>
-							<Download size={14} /> Download Template
-						</button>
-					</div>
-				</div>
+      {#each Object.entries(grouped) as [programTitle, group]}
+        <div class="card">
+          <div class="mb-4 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0A1F44]/10 text-sm font-bold text-[#0A1F44]">
+                {group.items.length}
+              </div>
+              <div>
+                <h3 class="font-semibold text-gray-900">{programTitle}</h3>
+                <span class="text-xs text-gray-500">{group.category}</span>
+              </div>
+            </div>
+            <button
+              onclick={() => exportProgram(programTitle, group.items)}
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition"
+            >
+              <FileDown size={13} /> Export
+            </button>
+          </div>
 
-				<!-- Step 2: Select Program -->
-				<div class="rounded-lg border border-gray-200 bg-white p-4">
-					<p class="mb-2 text-sm font-medium text-gray-800">Step 2 — Select a Program *</p>
-					<select bind:value={importProgramId} class="input">
-						<option value="">— Select a Program —</option>
-						{#each programs as p}
-							<option value={p.id}>{p.title}</option>
-						{/each}
-					</select>
-				</div>
+          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {#each group.items as b}
+              <button
+                type="button"
+                onclick={() => openProfile(b)}
+                class="flex items-start gap-3 rounded-xl bg-gray-50 p-3 text-left hover:bg-blue-50 hover:shadow-sm transition-all duration-150 group w-full"
+              >
+                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0A1F44] text-xs font-bold text-white mt-0.5">
+                  {b.full_name.charAt(0)}
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center justify-between gap-1">
+                    <div class="truncate text-sm font-semibold text-gray-900">{b.full_name}</div>
+                    <ChevronRight size={13} class="shrink-0 text-gray-300 group-hover:text-[#0A1F44] transition-colors" />
+                  </div>
+                  {#if b.address}
+                    <div class="flex items-center gap-1 mt-0.5">
+                      <MapPin size={10} class="shrink-0 text-gray-400" />
+                      <div class="truncate text-xs text-gray-400">{b.address}</div>
+                    </div>
+                  {/if}
+                  {#if b.contact}
+                    <div class="flex items-center gap-1 mt-0.5">
+                      <Phone size={10} class="shrink-0 text-gray-400" />
+                      <div class="truncate text-xs text-gray-400">{b.contact}</div>
+                    </div>
+                  {/if}
+                </div>
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/each}
 
-				<!-- Step 3: Upload File -->
-				<div class="rounded-lg border border-gray-200 bg-white p-4">
-					<p class="mb-2 text-sm font-medium text-gray-800">Step 3 — Upload Your Excel File *</p>
-					<input
-						bind:this={fileInput}
-						type="file"
-						accept=".xlsx,.xls,.csv"
-						onchange={handleFileUpload}
-						class="block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-[#0A1F44] hover:file:bg-blue-100"
-					/>
-					<p class="mt-1 text-xs text-gray-400">Accepted formats: .xlsx, .xls, .csv</p>
-				</div>
+      {#if Object.keys(grouped).length === 0}
+        <div class="card flex flex-col items-center gap-2 py-12 text-center text-gray-400">
+          <Users size={32} class="text-gray-300" />
+          No beneficiaries found
+        </div>
+      {/if}
+    {/if}
 
-				<!-- Preview Table -->
-				{#if importPreview.length > 0}
-					<div class="rounded-lg border border-gray-200 bg-white p-4">
-						<p class="mb-3 text-sm font-medium text-gray-800">
-							Preview — {importPreview.length} records ready to import
-						</p>
-						<div class="max-h-48 overflow-x-auto overflow-y-auto">
-							<table class="w-full text-xs">
-								<thead class="sticky top-0 bg-gray-50">
-									<tr class="text-left text-gray-500">
-										<th class="px-3 py-2 font-medium">#</th>
-										<th class="px-3 py-2 font-medium">Full Name</th>
-										<th class="px-3 py-2 font-medium">Address</th>
-										<th class="px-3 py-2 font-medium">Contact</th>
-										<th class="px-3 py-2 font-medium">Age</th>
-									</tr>
-								</thead>
-								<tbody class="divide-y divide-gray-50">
-									{#each importPreview as row, i}
-										<tr class="hover:bg-gray-50">
-											<td class="px-3 py-1.5 text-gray-400">{i + 1}</td>
-											<td class="px-3 py-1.5 font-medium">{row.full_name}</td>
-											<td class="px-3 py-1.5 text-gray-600">{row.address}</td>
-											<td class="px-3 py-1.5">{row.contact}</td>
-											<td class="px-3 py-1.5">{row.age || '—'}</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
-					</div>
+  {:else}
 
-					<!-- Import Submit -->
-					<button
-						class="btn-primary flex w-full items-center justify-center gap-2 py-2.5"
-						onclick={submitImport}
-						disabled={importLoading}
-					>
-						<Upload size={15} />
-						{importLoading ? 'Importing...' : `Import ${importPreview.length} Beneficiaries`}
-					</button>
-				{/if}
-			</div>
-		</div>
-	{/if}
+    <!-- Search Tab -->
+    <div class="card">
+      <p class="text-sm font-medium text-gray-700 mb-3">Search for a resident to view their complete benefit history</p>
+      <div class="flex gap-2">
+        <div class="relative flex-1">
+          <Search size={15} class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input bind:value={searchQuery} onkeydown={handleSearchKey} class="input pl-8 w-full" placeholder="e.g. Juan Dela Cruz" />
+        </div>
+        <button class="btn-primary px-5 flex items-center gap-2" onclick={runSearch} disabled={searchLoading || !searchQuery.trim()}>
+          <Search size={14} /> {searchLoading ? 'Searching...' : 'Search'}
+        </button>
+      </div>
+      {#if searchError}
+        <p class="mt-2 text-sm text-red-600">{searchError}</p>
+      {/if}
+    </div>
 
-	<!-- Filters -->
-	<div class="card flex flex-wrap gap-3">
-		<div class="min-w-48 flex-1">
-			<label class="label flex items-center gap-1.5" for="fp">
-				<SlidersHorizontal size={13} class="text-gray-400" /> Filter by Program
-			</label>
-			<select id="fp" bind:value={filterProgram} class="input">
-				<option value="">All Programs</option>
-				{#each programs as p}
-					<option value={p.id}>{p.title}</option>
-				{/each}
-			</select>
-		</div>
-		<div class="min-w-48 flex-1">
-			<label class="label flex items-center gap-1.5" for="fs">
-				<Search size={13} class="text-gray-400" /> Search
-			</label>
-			<input id="fs" bind:value={search} class="input" placeholder="Search by name..." />
-		</div>
-	</div>
+    {#if searchDone}
+      {#if searchResults.length === 0}
+        <div class="card text-center py-12 text-gray-400">
+          <Search size={32} class="mx-auto mb-2 text-gray-300" />
+          <p class="text-sm">No records found for "{searchQuery}"</p>
+        </div>
+      {:else}
+        {#each searchResults as result}
+          <div class="card">
+            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
+              <div class="w-10 h-10 rounded-full bg-[#0A1F44] flex items-center justify-center text-white font-bold text-sm shrink-0">
+                {result.full_name.charAt(0)}
+              </div>
+              <div>
+                <div class="font-semibold text-gray-900">{result.full_name}</div>
+                <div class="text-xs text-gray-400">{result.address}</div>
+              </div>
+              <span class="ml-auto text-xs font-medium px-2.5 py-1 rounded-full bg-[#0A1F44]/10 text-[#0A1F44]">
+                {result.records.length} record{result.records.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+            <div class="space-y-2">
+              {#each result.records as rec}
+                <div class="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2.5 gap-3">
+                  <div class="min-w-0">
+                    <div class="text-sm font-medium truncate">{rec.program_title}</div>
+                    <div class="text-xs text-gray-400">{rec.category} · {fmtDate(rec.created_at)}</div>
+                  </div>
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 {statusBadgeClass(rec.status)}">
+                    {rec.status}
+                  </span>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/each}
+      {/if}
+    {:else if !searchLoading && !searchDone}
+      <div class="card text-center py-12 text-gray-400">
+        <History size={32} class="mx-auto mb-2 text-gray-300" />
+        <p class="text-sm">Enter a name above to see their benefit history</p>
+      </div>
+    {/if}
 
-	<!-- Beneficiary List -->
-	{#if loading}
-		<div class="text-sm text-gray-400">Loading beneficiaries...</div>
-	{:else}
-		<div class="text-sm font-medium text-gray-500">
-			{filtered.length} beneficiar{filtered.length === 1 ? 'y' : 'ies'} total
-		</div>
-
-		{#each Object.entries(grouped) as [programTitle, group]}
-			<div class="card">
-				<!-- Program Group Header -->
-				<div class="mb-4 flex items-center gap-3">
-					<div
-						class="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0A1F44]/10 text-sm font-bold text-[#0A1F44]"
-					>
-						{group.items.length}
-					</div>
-					<div>
-						<h3 class="font-semibold text-gray-900">{programTitle}</h3>
-						<span class="text-xs text-gray-500">{group.category}</span>
-					</div>
-				</div>
-
-				<!-- Beneficiary Cards -->
-				<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-					{#each group.items as b}
-						<div class="flex items-center gap-3 rounded-lg bg-gray-50 p-2.5">
-							<!-- Avatar with first letter -->
-							<div
-								class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0A1F44] text-xs font-bold text-white"
-							>
-								{b.full_name.charAt(0)}
-							</div>
-							<div class="min-w-0">
-								<div class="truncate text-sm font-medium">{b.full_name}</div>
-								<div class="truncate text-xs text-gray-400">{b.address}</div>
-							</div>
-						</div>
-					{/each}
-				</div>
-			</div>
-		{/each}
-
-		{#if Object.keys(grouped).length === 0}
-			<div class="card flex flex-col items-center gap-2 py-12 text-center text-gray-400">
-				<Users size={32} class="text-gray-300" />
-				No beneficiaries found
-			</div>
-		{/if}
-	{/if}
+  {/if}
 </div>

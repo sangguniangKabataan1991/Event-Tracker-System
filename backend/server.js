@@ -7,6 +7,7 @@ import { dirname, join }  from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { initDatabase, query, run } from './db/database.js';
 import { sendWelcomeEmail, verifyEmailConnection } from './services/email.js';
+import { authenticate, requireAdmin, requireStrictAdmin } from './middleware/auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app  = express();
@@ -41,7 +42,7 @@ app.get('/api/categories', async (req, res) => {
   res.json(await query('SELECT * FROM program_categories ORDER BY name'));
 });
 
-app.post('/api/categories', async (req, res) => {
+app.post('/api/categories', authenticate, requireStrictAdmin, async (req, res) => {
   try {
     const { name, description } = req.body;
     const result = await run(
@@ -54,7 +55,7 @@ app.post('/api/categories', async (req, res) => {
   }
 });
 
-app.delete('/api/categories/:name', async (req, res) => {
+app.delete('/api/categories/:name', authenticate, requireStrictAdmin, async (req, res) => {
   try {
     await run(
       'DELETE FROM program_categories WHERE name = ?',
@@ -67,7 +68,7 @@ app.delete('/api/categories/:name', async (req, res) => {
 });
 
 // ── USERS ──────────────────────────────────────────────────────────────────
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', authenticate, requireAdmin, async (req, res) => {
   res.json(
     await query(
       'SELECT id, username, full_name, role, position, email, contact, barangay, created_at FROM users ORDER BY created_at DESC'
@@ -75,7 +76,7 @@ app.get('/api/users', async (req, res) => {
   );
 });
 
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', authenticate, requireStrictAdmin, async (req, res) => {
   try {
     const { username, password, full_name, position, email } = req.body;
 
@@ -115,7 +116,7 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', authenticate, requireStrictAdmin, async (req, res) => {
   try {
     const { full_name, position, password, email } = req.body;
     if (!full_name)
@@ -143,7 +144,7 @@ app.put('/api/users/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', authenticate, requireStrictAdmin, async (req, res) => {
   try {
     const user = await query('SELECT role FROM users WHERE id = ?', [req.params.id]);
     if (user[0]?.role === 'admin') {
@@ -159,7 +160,7 @@ app.delete('/api/users/:id', async (req, res) => {
 });
 
 // ── BARANGAY INFO ──────────────────────────────────────────────────────────
-app.get('/api/barangay-info', async (req, res) => {
+app.get('/api/barangay-info', authenticate, requireAdmin, async (req, res) => {
   try {
     const rows = await query('SELECT * FROM barangay_info LIMIT 1');
     res.json(rows[0] || {});
@@ -168,7 +169,7 @@ app.get('/api/barangay-info', async (req, res) => {
   }
 });
 
-app.put('/api/barangay-info', async (req, res) => {
+app.put('/api/barangay-info', authenticate, requireStrictAdmin, async (req, res) => {
   try {
     const { barangay_name, sk_chairperson, contact, address, municipality } = req.body;
     const existing = await query('SELECT id FROM barangay_info LIMIT 1');

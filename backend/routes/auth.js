@@ -110,42 +110,7 @@ router.post('/forgot-password', async (req, res) => {
       to:        user.email,
       full_name: user.full_name,
       token,
-    });
-
-    res.json({ message: 'If that email exists, a reset link has been sent.' });
-  } catch (e) {
-    console.error('Forgot password error:', e.message);
-    res.status(500).json({ error: 'Failed to send reset email. Check email configuration.' });
-  }
-});
-
-// ── RESET PASSWORD ─────────────────────────────────────────────────────────
-router.post('/forgot-password', async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email)
-      return res.status(400).json({ error: 'Email is required' });
-
-    const user = await queryOne('SELECT * FROM users WHERE email = ?', [email]);
-
-    if (!user)
-      return res.json({ message: 'If that email exists, a reset link has been sent.' });
-
-    const token     = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-
-    await run(
-      `INSERT INTO password_resets (user_id, token, expires_at)
-       VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE token = VALUES(token), expires_at = VALUES(expires_at)`,
-      [user.id, token, expiresAt]
-    );
-
-    await sendPasswordResetEmail({
-      to:        user.email,
-      full_name: user.full_name,
-      token,
-      role:      user.role,  
+      role:      user.role,
     });
 
     res.json({ message: 'If that email exists, a reset link has been sent.' });
@@ -174,6 +139,56 @@ router.get('/reset-password/verify', async (req, res) => {
       return res.status(400).json({ valid: false, error: 'Link is invalid or expired.' });
 
     res.json({ valid: true, full_name: reset.full_name });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── RESET PASSWORD ─────────────────────────────────────────────────────────
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password)
+      return res.status(400).json({ error: 'Token and new password are required.' });
+    if (password.length < 6)
+      return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+
+    const reset = await queryOne(
+      `SELECT * FROM password_resets WHERE token = ? AND expires_at > NOW()`,
+      [token]
+    );
+    if (!reset)
+      return res.status(400).json({ error: 'Reset link is invalid or has expired.' });
+
+    const hash = await bcrypt.hash(password, 10);
+    await run('UPDATE users SET password = ? WHERE id = ?', [hash, reset.user_id]);
+    await run('DELETE FROM password_resets WHERE user_id = ?', [reset.user_id]);
+
+    res.json({ message: 'Password reset successfully.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── CHANGE PASSWORD (logged-in user) ──────────────────────────────────────
+router.post('/change-password', authenticate, async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body;
+    if (!current_password || !new_password)
+      return res.status(400).json({ error: 'Current and new password are required.' });
+    if (new_password.length < 6)
+      return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+
+    const user = await queryOne('SELECT * FROM users WHERE id = ?', [req.user.id]);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    const valid = await bcrypt.compare(current_password, user.password);
+    if (!valid) return res.status(400).json({ error: 'Current password is incorrect.' });
+
+    const hash = await bcrypt.hash(new_password, 10);
+    await run('UPDATE users SET password = ? WHERE id = ?', [hash, req.user.id]);
+
+    res.json({ message: 'Password changed successfully.' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
