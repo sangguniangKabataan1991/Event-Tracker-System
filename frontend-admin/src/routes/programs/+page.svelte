@@ -38,16 +38,10 @@
   }
   interface Category { name: string; }
   interface FormData {
-    title: string;
-    description: string;
-    category: string;
-    slots: string;
-    requirements: string;
-    start_date: string;
-    end_date: string;
+    title: string; description: string; category: string;
+    slots: string; requirements: string; start_date: string; end_date: string;
   }
 
-  // ── State ──────────────────────────────────────────────────────────────────
   let programs        = $state<Program[]>([]);
   let categories      = $state<Category[]>([]);
   let loading         = $state(true);
@@ -57,14 +51,11 @@
   let error           = $state('');
   let success         = $state('');
 
-  // Single searchQuery bound to the input — live search.
-  // The Search button is also present for UX (clicking it just confirms the query).
   let searchQuery  = $state('');
   let filterCat    = $state('');
   let filterStatus = $state('');
   let sortBy       = $state<'default' | 'slots' | 'status' | 'date'>('default');
 
-  // Delete confirmation modal
   let showDeleteConfirm  = $state(false);
   let pendingDeleteId    = $state<string | number | null>(null);
   let pendingDeleteTitle = $state('');
@@ -74,14 +65,10 @@
     requirements: '', start_date: '', end_date: '',
   });
 
-  // ── Derived filtered + sorted list ────────────────────────────────────────
-  // (p.description ?? '') prevents crash when description is null in the DB
   let filtered = $derived(
     programs.filter(p => {
       const q = searchQuery.toLowerCase();
-      const matchSearch  = !q
-        || p.title.toLowerCase().includes(q)
-        || (p.description ?? '').toLowerCase().includes(q);
+      const matchSearch  = !q || p.title.toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q);
       const matchCat     = !filterCat    || p.category === filterCat;
       const matchStatus  = !filterStatus || p.status   === filterStatus;
       return matchSearch && matchCat && matchStatus;
@@ -96,13 +83,8 @@
     })
   );
 
-  function clearFilters() {
-    searchQuery  = '';
-    filterCat    = '';
-    filterStatus = '';
-  }
+  function clearFilters() { searchQuery = ''; filterCat = ''; filterStatus = ''; }
 
-  // ── Lifecycle ──────────────────────────────────────────────────────────────
   onMount(async () => {
     await loadData();
     const urlStatus = page.url.searchParams.get('status');
@@ -112,10 +94,7 @@
   async function loadData() {
     loading = true;
     try {
-      [programs, categories] = await Promise.all([
-        apiFetch('/programs'),
-        apiFetch('/categories'),
-      ]);
+      [programs, categories] = await Promise.all([apiFetch('/programs'), apiFetch('/categories')]);
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to load data';
     } finally {
@@ -123,18 +102,14 @@
     }
   }
 
-  // ── Form helpers ──────────────────────────────────────────────────────────
   function openCreate() {
     form = { title: '', description: '', category: '', slots: '', requirements: '', start_date: '', end_date: '' };
-    editMode = false;
-    showForm = true;
+    editMode = false; showForm = true;
   }
 
   function openEdit(p: Program) {
     form = { ...p, slots: String(p.slots), description: p.description ?? '' };
-    editMode = true;
-    selectedProgram = p;
-    showForm = true;
+    editMode = true; selectedProgram = p; showForm = true;
   }
 
   async function submitForm() {
@@ -164,9 +139,7 @@
   }
 
   function confirmDelete(id: string | number, title: string) {
-    pendingDeleteId    = id;
-    pendingDeleteTitle = title;
-    showDeleteConfirm  = true;
+    pendingDeleteId = id; pendingDeleteTitle = title; showDeleteConfirm = true;
   }
 
   async function executeDelete() {
@@ -177,9 +150,7 @@
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to delete program';
     } finally {
-      showDeleteConfirm  = false;
-      pendingDeleteId    = null;
-      pendingDeleteTitle = '';
+      showDeleteConfirm = false; pendingDeleteId = null; pendingDeleteTitle = '';
     }
   }
 
@@ -191,31 +162,25 @@
   };
 
   const statusLabels: Record<string, string> = {
-    open: 'Open / Active',
-    closed: 'Closed',
-    draft: 'Draft',
-    completed: 'Completed',
+    open: 'Open / Active', closed: 'Closed', draft: 'Draft', completed: 'Completed',
   };
 </script>
 
-<div class="p-6 space-y-5">
+<div class="p-4 sm:p-6 space-y-5">
 
-  <!-- Page Header -->
-  <div class="flex items-center justify-between">
+  <!-- Header -->
+  <div class="flex items-center justify-between gap-3">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Programs</h1>
+      <h1 class="text-xl sm:text-2xl font-bold text-gray-900">Programs</h1>
       <p class="text-gray-500 text-sm">Manage SK assistance programs</p>
     </div>
-    <button
-      onclick={openCreate}
-      class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition hover:opacity-90 active:scale-[0.98]"
-      style="background: #0A1F44;"
-    >
-      <Plus size={15} /> New Program
+    <button onclick={openCreate}
+      class="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold text-white transition hover:opacity-90 active:scale-[0.98] shrink-0"
+      style="background: #0A1F44;">
+      <Plus size={15} /> <span class="hidden sm:inline">New Program</span><span class="sm:hidden">New</span>
     </button>
   </div>
 
-  <!-- Alert Messages -->
   {#if error}
     <div class="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm">{error}</div>
   {/if}
@@ -223,98 +188,86 @@
     <div class="bg-emerald-50 border border-emerald-200 text-emerald-700 p-3 rounded-xl text-sm">{success}</div>
   {/if}
 
-  <!-- ── SEARCH / FILTER / SORT BAR ──────────────────────────────────────── -->
-  <div class="bg-white border border-slate-200 rounded-2xl px-4 py-3 flex flex-wrap gap-3 items-end shadow-sm">
+  <!-- Search / Filter / Sort Bar -->
+  <div class="bg-white border border-slate-200 rounded-2xl px-4 py-3 space-y-3 shadow-sm">
+    <div class="flex flex-wrap gap-3 items-end">
 
-    <!-- Search — live filter + Search button -->
-    <div class="flex-1 min-w-48">
-      <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1 mb-1.5" for="prog-search">
-        <Search size={11} /> Search
-      </label>
-      <div class="flex gap-1.5">
-        <div class="relative flex-1">
-          <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          <input
-            id="prog-search"
-            bind:value={searchQuery}
-            class="w-full border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 bg-slate-50"
-            placeholder="Search by title or description..."
-          />
+      <!-- Search -->
+      <div class="flex-1 min-w-50">
+        <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1 mb-1.5" for="prog-search">
+          <Search size={11} /> Search
+        </label>
+        <div class="flex gap-1.5">
+          <div class="relative flex-1">
+            <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input id="prog-search" bind:value={searchQuery}
+              class="w-full border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 bg-slate-50"
+              placeholder="Search programs..." />
+          </div>
         </div>
-        <!-- Search button — filters are already live, button is a visual affordance -->
-        <button
-          type="button"
-          onclick={() => { /* already live — no extra action needed */ }}
-          class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold text-white transition hover:opacity-90 active:scale-[0.97] shrink-0"
-          style="background: #0A1F44;"
-        >
-          <Search size={13} /> Search
-        </button>
+      </div>
+
+      <!-- Category Filter -->
+      <div class="w-full sm:w-44">
+        <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1 mb-1.5" for="prog-cat">
+          <Filter size={11} /> Category
+        </label>
+        <select id="prog-cat" bind:value={filterCat}
+          class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400 bg-slate-50 appearance-none">
+          <option value="">All Categories</option>
+          {#each categories as cat}<option value={cat.name}>{cat.name}</option>{/each}
+        </select>
+      </div>
+
+      <!-- Status Filter -->
+      <div class="w-full sm:w-40">
+        <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1 mb-1.5" for="prog-status">
+          <Filter size={11} /> Status
+        </label>
+        <select id="prog-status" bind:value={filterStatus}
+          class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400 bg-slate-50 appearance-none">
+          <option value="">All Statuses</option>
+          <option value="open">Open / Active</option>
+          <option value="closed">Closed</option>
+          <option value="draft">Draft</option>
+          <option value="completed">Completed</option>
+        </select>
+      </div>
+
+      <!-- Sort -->
+      <div class="w-full sm:w-44">
+        <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1 mb-1.5" for="prog-sort">
+          <ArrowUpDown size={11} /> Sort by
+        </label>
+        <select id="prog-sort" bind:value={sortBy}
+          class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400 bg-slate-50 appearance-none">
+          <option value="default">Default</option>
+          <option value="slots">Slots Filled %</option>
+          <option value="status">Status</option>
+        </select>
       </div>
     </div>
 
-    <!-- Category Filter -->
-    <div class="w-48">
-      <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1 mb-1.5" for="prog-cat">
-        <Filter size={11} /> Category
-      </label>
-      <select id="prog-cat" bind:value={filterCat}
-        class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 bg-slate-50 appearance-none">
-        <option value="">All Categories</option>
-        {#each categories as cat}
-          <option value={cat.name}>{cat.name}</option>
-        {/each}
-      </select>
-    </div>
-
-    <!-- Status Filter -->
-    <div class="w-44">
-      <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1 mb-1.5" for="prog-status">
-        <Filter size={11} /> Status
-      </label>
-      <select id="prog-status" bind:value={filterStatus}
-        class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 bg-slate-50 appearance-none">
-        <option value="">All Statuses</option>
-        <option value="open">Open / Active</option>
-        <option value="closed">Closed</option>
-        <option value="draft">Draft</option>
-        <option value="completed">Completed</option>
-      </select>
-    </div>
-
-    <!-- Sort -->
-    <div class="w-44">
-      <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1 mb-1.5" for="prog-sort">
-        <ArrowUpDown size={11} /> Sort by
-      </label>
-      <select id="prog-sort" bind:value={sortBy}
-        class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 bg-slate-50 appearance-none">
-        <option value="default">Default (Date Added)</option>
-        <option value="slots">Slots Filled %</option>
-        <option value="status">Status</option>
-      </select>
-    </div>
-
-    <!-- Active filter pills + count -->
-    <div class="flex items-center gap-2 self-end pb-2">
-      {#if filterStatus}
-        <span class="flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-medium">
-          {statusLabels[filterStatus] ?? filterStatus}
-          <button onclick={() => filterStatus = ''} class="ml-1 hover:text-red-500 transition" title="Clear status filter">×</button>
-        </span>
-      {/if}
-      {#if searchQuery || filterCat || filterStatus}
+    <!-- Active filter pills -->
+    {#if searchQuery || filterCat || filterStatus}
+      <div class="flex items-center gap-2 flex-wrap">
+        {#if filterStatus}
+          <span class="flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-medium">
+            {statusLabels[filterStatus] ?? filterStatus}
+            <button onclick={() => filterStatus = ''} class="ml-1 hover:text-red-500 transition">×</button>
+          </span>
+        {/if}
         <span class="text-xs text-slate-400">{sorted.length} of {programs.length}</span>
         <button onclick={clearFilters} class="text-xs text-blue-500 hover:underline transition">Clear all</button>
-      {/if}
-    </div>
+      </div>
+    {/if}
   </div>
 
-  <!-- ── CREATE / EDIT MODAL ─────────────────────────────────────────────── -->
+  <!-- Create / Edit Modal -->
   {#if showForm}
-    <div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(10,31,68,0.5);">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+    <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style="background: rgba(10,31,68,0.5);">
+      <div class="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
+        <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100 sticky top-0 bg-white z-10">
           <div>
             <h2 class="text-base font-bold text-slate-900">{editMode ? 'Edit Program' : 'New Program'}</h2>
             <p class="text-xs text-slate-400 mt-0.5">
@@ -342,9 +295,7 @@
             <select id="category" bind:value={form.category} required
               class="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition bg-slate-50 appearance-none">
               <option value="">Select a category</option>
-              {#each categories as cat}
-                <option value={cat.name}>{cat.name}</option>
-              {/each}
+              {#each categories as cat}<option value={cat.name}>{cat.name}</option>{/each}
             </select>
           </div>
 
@@ -368,7 +319,7 @@
             <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 uppercase tracking-wide" for="req">
               <ListChecks size={11} /> Requirements <span class="text-red-400">*</span>
             </label>
-            <textarea id="req" bind:value={form.requirements} required placeholder="List of requirements for applicants..." rows="3"
+            <textarea id="req" bind:value={form.requirements} required placeholder="List of requirements..." rows="3"
               class="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition bg-slate-50 resize-none"></textarea>
           </div>
 
@@ -403,7 +354,7 @@
     </div>
   {/if}
 
-  <!-- ── CUSTOM DELETE CONFIRMATION MODAL ───────────────────────────────── -->
+  <!-- Delete Confirmation Modal -->
   {#if showDeleteConfirm}
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(10,31,68,0.5);">
       <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
@@ -417,7 +368,7 @@
           </div>
         </div>
         <p class="text-sm text-slate-600 mb-5">
-          Are you sure you want to delete <strong class="text-slate-900">"{pendingDeleteTitle}"</strong>? All associated data will be permanently removed.
+          Are you sure you want to delete <strong class="text-slate-900">"{pendingDeleteTitle}"</strong>?
         </p>
         <div class="flex gap-2">
           <button onclick={executeDelete}
@@ -433,7 +384,7 @@
     </div>
   {/if}
 
-  <!-- ── PROGRAM LIST ─────────────────────────────────────────────────────── -->
+  <!-- Program List -->
   {#if loading}
     <div class="flex items-center gap-2 text-slate-400 text-sm py-12">
       <div class="w-4 h-4 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin"></div>
@@ -459,8 +410,8 @@
       {#each sorted as p}
         {@const cfg = statusConfig[p.status] ?? statusConfig.closed}
         {@const slotPct = p.slots > 0 ? Math.round(p.slots_used / p.slots * 100) : 0}
-        <div class="bg-white border border-slate-200 rounded-2xl px-5 py-4 hover:shadow-md hover:border-slate-300 transition-all">
-          <div class="flex items-start justify-between gap-4">
+        <div class="bg-white border border-slate-200 rounded-2xl px-4 sm:px-5 py-4 hover:shadow-md hover:border-slate-300 transition-all">
+          <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 flex-wrap mb-1">
                 <h3 class="font-semibold text-slate-900 text-sm">{p.title}</h3>
@@ -470,19 +421,19 @@
               <p class="text-slate-400 text-xs mb-3 truncate">{p.description || 'No description provided'}</p>
 
               <div class="mb-2">
-                <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden w-48">
+                <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden w-full sm:w-48">
                   <div class="h-full rounded-full transition-all" style="width:{slotPct}%; background:#0A1F44;"></div>
                 </div>
               </div>
 
-              <div class="flex gap-4 text-xs">
+              <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs">
                 <span class="text-slate-400">Slots: <strong class="text-slate-700">{p.slots_used}/{p.slots}</strong> <span class="text-slate-300">({slotPct}%)</span></span>
                 <span class="text-slate-400">Pending: <strong class="text-amber-600">{p.pending_count}</strong></span>
                 <span class="text-slate-400">Approved: <strong class="text-emerald-600">{p.approved_count}</strong></span>
               </div>
             </div>
 
-            <div class="flex gap-1.5 shrink-0 flex-wrap justify-end items-center">
+            <div class="flex gap-1.5 flex-wrap items-center">
               {#if p.status === 'draft' || p.status === 'closed'}
                 <button onclick={() => setStatus(p.id, 'open')}
                   class="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition">

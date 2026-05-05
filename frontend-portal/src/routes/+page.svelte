@@ -46,15 +46,15 @@
 <div class="space-y-6">
 	<!-- Hero -->
 	<div
-		class="rounded-2xl p-8 text-center text-white shadow-lg"
+		class="rounded-2xl p-6 sm:p-8 text-center text-white shadow-lg"
 		style="background: linear-gradient(135deg, #0A1F44 0%, #0d2756 60%, #162d5e 100%);"
 	>
 		<div class="mb-3 flex justify-center">
 			<div class="rounded-2xl p-3" style="background: rgba(255,255,255,0.10);">
-				<Clipboard class="h-10 w-10" style="color: rgba(255,255,255,0.85);" />
+				<Clipboard class="h-8 w-8 sm:h-10 sm:w-10" style="color: rgba(255,255,255,0.85);" />
 			</div>
 		</div>
-		<h1 class="mb-2 text-2xl font-bold tracking-tight">SK Beneficiary Programs</h1>
+		<h1 class="mb-2 text-xl sm:text-2xl font-bold tracking-tight">SK Beneficiary Programs</h1>
 		<p class="mx-auto max-w-sm text-sm" style="color: rgba(255,255,255,0.65);">
 			Apply for available SK programs and manage your applications easily through our portal.
 		</p>
@@ -62,7 +62,7 @@
 			<div class="mt-5 flex justify-center gap-3">
 				<a
 					href="/register"
-					class="flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-semibold shadow transition"
+					class="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold shadow transition"
 					style="background: white; color: #0A1F44;"
 				>
 					<UserPlus class="h-4 w-4" />
@@ -70,7 +70,7 @@
 				</a>
 				<a
 					href="/login"
-					class="flex items-center gap-2 rounded-lg border px-5 py-2 text-sm text-white transition"
+					class="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm text-white transition"
 					style="background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.25);"
 				>
 					<LogIn class="h-4 w-4" />
@@ -108,11 +108,8 @@
 		{:else}
 			<div class="grid gap-4">
 				{#each programs as program}
-					<div
-						class="rounded-2xl border border-slate-200 bg-white p-5 transition-all hover:shadow-md"
-						style="hover:border-color: #0A1F44;"
-					>
-						<div class="flex items-start justify-between gap-4">
+					<div class="rounded-2xl border border-slate-200 bg-white p-5 transition-all hover:shadow-md">
+						<div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
 							<div class="min-w-0 flex-1">
 								<div class="mb-1 flex flex-wrap items-center gap-2">
 									<h3 class="font-semibold text-slate-900">{program.title}</h3>
@@ -121,9 +118,9 @@
 									>
 										<CircleCheck class="h-3 w-3" /> OPEN
 									</span>
-									<span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
-										>{program.category}</span
-									>
+									<span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+										{program.category}
+									</span>
 								</div>
 								<p class="mb-3 text-sm text-slate-500">
 									{program.description || 'Walang detalye.'}
@@ -132,9 +129,9 @@
 									<span class="flex items-center gap-1">
 										<Users class="h-3.5 w-3.5" />
 										Slots:
-										<strong class="ml-0.5 text-slate-700"
-											>{program.slots - program.slots_used} remaining of {program.slots}</strong
-										>
+										<strong class="ml-0.5 text-slate-700">
+											{program.slots - program.slots_used} remaining of {program.slots}
+										</strong>
 									</span>
 									{#if program.start_date}
 										<span class="flex items-center gap-1">
@@ -145,23 +142,21 @@
 								</div>
 								{#if program.requirements}
 									<div class="mt-2 text-xs text-slate-500">
-										<strong>Requirements:</strong>
-										{program.requirements}
+										<strong>Requirements:</strong> {program.requirements}
 									</div>
 								{/if}
 							</div>
 
-							<div class="shrink-0">
+							<div class="shrink-0 sm:self-start">
 								{#if $user}
 									{#if program.slots_used >= program.slots}
-										<span
-											class="block rounded-lg bg-slate-100 px-3 py-2 text-center text-xs text-slate-400"
-											>Fully booked</span
-										>
+										<span class="block rounded-lg bg-slate-100 px-3 py-2 text-center text-xs text-slate-400">
+											Fully booked
+										</span>
 									{:else}
 										<a
 											href="/apply/{program.id}"
-											class="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium whitespace-nowrap text-white transition"
+											class="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white transition"
 											style="background: #0A1F44;"
 											onmouseenter={(e) => (e.currentTarget.style.background = '#0d2756')}
 											onmouseleave={(e) => (e.currentTarget.style.background = '#0A1F44')}
@@ -172,7 +167,7 @@
 								{:else}
 									<a
 										href="/login"
-										class="flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium whitespace-nowrap transition"
+										class="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium transition"
 										style="color: #0A1F44; border-color: rgba(10,31,68,0.25); background: rgba(10,31,68,0.05);"
 										onmouseenter={(e) => (e.currentTarget.style.background = 'rgba(10,31,68,0.10)')}
 										onmouseleave={(e) => (e.currentTarget.style.background = 'rgba(10,31,68,0.05)')}

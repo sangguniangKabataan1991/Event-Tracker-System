@@ -127,7 +127,7 @@
 			Loading...
 		</div>
 	{:else if success}
-		<div class="rounded-2xl border border-slate-200 bg-white px-8 py-14 text-center shadow-sm">
+		<div class="rounded-2xl border border-slate-200 bg-white px-6 sm:px-8 py-12 sm:py-14 text-center shadow-sm">
 			<div class="mb-4 flex justify-center">
 				<div class="rounded-full bg-emerald-100 p-4">
 					<CheckCircle2 class="h-10 w-10 text-emerald-600" />
@@ -138,10 +138,10 @@
 				Your application has been successfully submitted. You can check the status of your
 				application in the "My Applications" section. Thank you for applying!
 			</p>
-			<div class="flex justify-center gap-3">
+			<div class="flex flex-col sm:flex-row justify-center gap-3">
 				<a
 					href="/my-applications"
-					class="rounded-lg px-5 py-2.5 text-sm font-medium text-white transition"
+					class="rounded-lg px-5 py-2.5 text-sm font-medium text-white transition text-center"
 					style="background: #0A1F44;"
 					onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.background = '#0d2756')}
 					onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.background = '#0A1F44')}
@@ -150,14 +150,13 @@
 				</a>
 				<a
 					href="/"
-					class="rounded-lg border border-slate-200 px-5 py-2.5 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
+					class="rounded-lg border border-slate-200 px-5 py-2.5 text-sm text-slate-600 transition hover:border-slate-300 hover:text-slate-800 text-center"
 				>
 					Back to Home
 				</a>
 			</div>
 		</div>
 	{:else}
-		<!-- Program Info Banner -->
 		{#if program}
 			<div
 				class="mb-5 rounded-xl border p-4"
@@ -167,7 +166,7 @@
 					<div class="shrink-0 rounded-lg p-2" style="background: rgba(10,31,68,0.10); color: #0A1F44;">
 						<ClipboardList class="h-5 w-5" />
 					</div>
-					<div>
+					<div class="min-w-0">
 						<h2 class="font-bold" style="color: #0A1F44;">{program.title}</h2>
 						<p class="text-sm" style="color: rgba(10,31,68,0.70);">{program.category}</p>
 						<p class="mt-1 flex items-center gap-1 text-xs" style="color: rgba(10,31,68,0.55);">
@@ -179,7 +178,7 @@
 			</div>
 		{/if}
 
-		<div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+		<div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
 			<h1 class="mb-1 text-lg font-bold text-slate-900">Application Form</h1>
 			<p class="mb-5 text-sm text-slate-500">Please fill out all fields correctly and completely.</p>
 
@@ -187,18 +186,11 @@
 				onsubmit={(e) => { e.preventDefault(); submitApplication(); }}
 				class="space-y-4"
 			>
-				<!-- Full Name -->
 				<div>
 					<label class="label" for="fn">Full Name *</label>
-					<input
-						id="fn"
-						bind:value={form.full_name}
-						class="input"
-						required
-					/>
+					<input id="fn" bind:value={form.full_name} class="input" required />
 				</div>
 
-				<!-- Age + Contact -->
 				<div class="grid grid-cols-2 gap-3">
 					<div>
 						<label class="label" for="age">Age *</label>
@@ -213,10 +205,7 @@
 						/>
 					</div>
 					<div>
-						<label class="label" for="contact">
-							Contact Number *
-							<span class="ml-auto font-normal text-slate-400"></span>
-						</label>
+						<label class="label" for="contact">Contact Number *</label>
 						<input
 							id="contact"
 							bind:value={form.contact}
@@ -229,33 +218,18 @@
 					</div>
 				</div>
 
-				<!-- Barangay -->
 				<div>
 					<label class="label" for="barangay">Barangay *</label>
-					<input
-						id="barangay"
-						bind:value={form.barangay}
-						class="input"
-						required
-					/>
+					<input id="barangay" bind:value={form.barangay} class="input" required />
 				</div>
 
-				<!-- Address -->
 				<div>
 					<label class="label" for="address">Address *</label>
-					<input
-						id="address"
-						bind:value={form.address}
-						class="input"
-						required
-					/>
+					<input id="address" bind:value={form.address} class="input" required />
 				</div>
 
-				<!-- Requirements -->
 				<div>
-					<label class="label" for="req">
-						Requirements *
-					</label>
+					<label class="label" for="req">Requirements *</label>
 
 					<div
 						class="overflow-hidden rounded-lg border transition focus-within:border-slate-400"
@@ -271,7 +245,6 @@
 
 						<div class="border-t border-slate-100"></div>
 
-						<!-- Attached files list -->
 						{#if attachedFiles.length > 0}
 							<ul class="flex flex-col gap-1 px-3 py-2">
 								{#each attachedFiles as file, i}
@@ -298,7 +271,6 @@
 							<div class="border-t border-slate-100"></div>
 						{/if}
 
-						<!-- Toolbar -->
 						<div class="flex items-center px-3 py-2">
 							<label class="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition hover:text-slate-600">
 								<Paperclip size={13} />
@@ -323,7 +295,14 @@
 					</div>
 				{/if}
 
-				<div class="flex gap-3 pt-1">
+				<div class="flex flex-col-reverse sm:flex-row gap-3 pt-1">
+					<a
+						href="/"
+						class="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2.5 text-sm text-slate-600 transition hover:border-slate-300"
+					>
+						<ArrowLeft class="h-4 w-4" />
+						Back
+					</a>
 					<button
 						type="submit"
 						class="flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-60"
@@ -342,13 +321,6 @@
 							Submit Application
 						{/if}
 					</button>
-					<a
-						href="/"
-						class="flex items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2.5 text-sm text-slate-600 transition hover:border-slate-300"
-					>
-						<ArrowLeft class="h-4 w-4" />
-						Back
-					</a>
 				</div>
 			</form>
 		</div>

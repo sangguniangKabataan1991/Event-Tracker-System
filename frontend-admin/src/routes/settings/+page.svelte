@@ -247,7 +247,7 @@
   }
 </script>
 
-<div class="p-6 space-y-6">
+<div class="p-4 sm:p-6 space-y-6">
 
   <!-- Header -->
   <div>
@@ -267,8 +267,8 @@
        ADD USER MODAL
   ══════════════════════════════════════════════════════════════════════ -->
   {#if showAddUser}
-    <div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(10,31,68,0.5);">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 overflow-y-auto max-h-[90vh]">
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4" style="background:rgba(10,31,68,0.5);">
+      <div class="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-6 overflow-y-auto max-h-[92vh]">
         <div class="flex items-center justify-between mb-5">
           <div>
             <h2 class="text-lg font-bold text-gray-900">Add New SK Officer</h2>

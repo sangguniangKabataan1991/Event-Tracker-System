@@ -21,7 +21,6 @@
     created_at: string;
     status: string;
   }
-
   interface Stats {
     totalPrograms: number;
     activePrograms: number;
@@ -29,14 +28,12 @@
     approvedBeneficiaries: number;
     rejectedApps: number;
   }
-
   interface MostAssisted {
     id: number;
     full_name: string;
     address: string;
     program_count: number;
   }
-
   interface ProgramStat {
     id: number;
     title: string;
@@ -47,14 +44,12 @@
     pending_count: number;
     approved_count: number;
   }
-
   interface RecentUser {
     id: number;
     full_name: string;
     username: string;
     created_at: string;
   }
-
   interface ProgramGroup {
     program_title: string;
     program_id: number;
@@ -67,7 +62,6 @@
   let recentApproved= $state<AppRow[]>([]);
   let recentUsers   = $state<RecentUser[]>([]);
   let mostAssisted  = $state<MostAssisted[]>([]);
-  // nearlyFull comes ONLY from /programs (real-time slots_used)
   let nearlyFull    = $state<ProgramStat[]>([]);
   let pendingGroups = $state<ProgramGroup[]>([]);
   let rejectedApps  = $state<AppRow[]>([]);
@@ -79,7 +73,6 @@
 
   onMount(async () => {
     try {
-      // Fetch /programs separately so slots_used is the real-time beneficiary count
       const [rep, pending, approved, users, rejected, programs] = await Promise.all([
         apiFetch('/beneficiaries/reports/summary'),
         apiFetch('/applications?status=pending&sort=newest'),
@@ -92,16 +85,11 @@
       stats        = rep.summary;
       mostAssisted = (rep.mostAssisted as MostAssisted[]).slice(0, 5);
 
-      // ── Programs Nearly Full ──────────────────────────────────────────────
-      // Use /programs data — slots_used here is COUNT(*) FROM beneficiaries (real-time).
-      // Show ALL open programs that have at least 1 beneficiary, sorted by fill % desc.
-      // This way admins see the status of every active program, not just the 75%+ ones.
       nearlyFull = (programs as ProgramStat[])
         .filter(p => p.slots > 0 && p.slots_used > 0 && p.status === 'open')
         .sort((a, b) => (b.slots_used / b.slots) - (a.slots_used / a.slots))
         .slice(0, 5);
 
-      // ── Pending groups ────────────────────────────────────────────────────
       const sortedPending = (pending as AppRow[])
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
@@ -159,9 +147,9 @@
 
 <svelte:window onclick={handleOutsideClick} />
 
-<div class="p-6 space-y-6">
+<div class="p-4 sm:p-6 space-y-5 sm:space-y-6">
   <div>
-    <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
+    <h1 class="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h1>
     <p class="text-gray-500 text-sm">SK Beneficiary Tracking and Management System</p>
   </div>
 
@@ -171,25 +159,25 @@
       Loading dashboard...
     </div>
   {:else if error}
-    <div class="bg-red-50 text-red-700 p-4 rounded-lg">{error}</div>
+    <div class="bg-red-50 text-red-700 p-4 rounded-lg text-sm">{error}</div>
   {:else if stats}
 
-    <!-- ── Summary Cards ── -->
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
 
       <a href="/programs"
         class="card border border-[#0A1F44]/15 bg-[#0A1F44]/10 text-[#0A1F44] flex flex-col gap-1
-               no-underline hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer">
-        <ClipboardList size={26} />
-        <div class="text-3xl font-bold mt-1">{stats.totalPrograms ?? 0}</div>
+               no-underline hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer p-4">
+        <ClipboardList size={22} />
+        <div class="text-2xl sm:text-3xl font-bold mt-1">{stats.totalPrograms ?? 0}</div>
         <div class="text-xs font-medium">Total Programs</div>
       </a>
 
       <a href="/programs?status=open"
         class="card border border-emerald-100 bg-emerald-50 text-emerald-700 flex flex-col gap-1
-               no-underline hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer">
-        <CheckSquare size={26} />
-        <div class="text-3xl font-bold mt-1">{stats.activePrograms ?? 0}</div>
+               no-underline hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer p-4">
+        <CheckSquare size={22} />
+        <div class="text-2xl sm:text-3xl font-bold mt-1">{stats.activePrograms ?? 0}</div>
         <div class="text-xs font-medium">Active Programs</div>
       </a>
 
@@ -198,11 +186,11 @@
         <button
           onclick={(e) => { e.stopPropagation(); showPendingDropdown = !showPendingDropdown; showRejectedDropdown = false; }}
           class="card border border-amber-100 bg-amber-50 text-amber-700 flex flex-col gap-1 w-full text-left
-                 hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer">
-          <Clock size={26} />
-          <div class="text-3xl font-bold mt-1">{stats.pendingApps ?? 0}</div>
+                 hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer p-4">
+          <Clock size={22} />
+          <div class="text-2xl sm:text-3xl font-bold mt-1">{stats.pendingApps ?? 0}</div>
           <div class="text-xs font-medium flex items-center justify-between">
-            Pending Applications
+            Pending
             {#if showPendingDropdown}<ChevronUp size={12} />{:else}<ChevronDown size={12} />{/if}
           </div>
         </button>
@@ -229,22 +217,22 @@
 
       <a href="/beneficiaries"
         class="card border border-[#0A1F44]/15 bg-[#0A1F44]/10 text-[#0A1F44] flex flex-col gap-1
-               no-underline hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer">
-        <Users size={26} />
-        <div class="text-3xl font-bold mt-1">{stats.approvedBeneficiaries ?? 0}</div>
-        <div class="text-xs font-medium">Total Beneficiaries</div>
+               no-underline hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer p-4">
+        <Users size={22} />
+        <div class="text-2xl sm:text-3xl font-bold mt-1">{stats.approvedBeneficiaries ?? 0}</div>
+        <div class="text-xs font-medium">Beneficiaries</div>
       </a>
 
       <!-- Rejected dropdown -->
-      <div class="relative dropdown-wrapper">
+      <div class="relative dropdown-wrapper col-span-2 md:col-span-1">
         <button
           onclick={(e) => { e.stopPropagation(); showRejectedDropdown = !showRejectedDropdown; showPendingDropdown = false; }}
           class="card border border-red-100 bg-red-50 text-red-700 flex flex-col gap-1 w-full text-left
-                 hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer">
-          <XCircle size={26} />
-          <div class="text-3xl font-bold mt-1">{stats.rejectedApps ?? 0}</div>
+                 hover:opacity-80 hover:scale-[1.02] transition-all duration-150 cursor-pointer p-4">
+          <XCircle size={22} />
+          <div class="text-2xl sm:text-3xl font-bold mt-1">{stats.rejectedApps ?? 0}</div>
           <div class="text-xs font-medium flex items-center justify-between">
-            Rejected Applications
+            Rejected
             {#if showRejectedDropdown}<ChevronUp size={12} />{:else}<ChevronDown size={12} />{/if}
           </div>
         </button>
@@ -271,16 +259,16 @@
 
     </div>
 
-    <!-- ── Main Grid ── -->
+    <!-- Main Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
       <!-- Recent Pending grouped per program -->
       <div class="card lg:col-span-2">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="font-semibold text-gray-800 flex items-center gap-2">
-            <Clock size={16} class="text-amber-500" /> Recent Pending Applications
+          <h2 class="font-semibold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
+            <Clock size={16} class="text-amber-500 shrink-0" /> Recent Pending Applications
           </h2>
-          <a href="/applications?status=pending" class="text-xs font-medium hover:underline" style="color:#0A1F44;">
+          <a href="/applications?status=pending" class="text-xs font-medium hover:underline shrink-0" style="color:#0A1F44;">
             View all →
           </a>
         </div>
@@ -308,9 +296,9 @@
                 {#if group.expanded}
                   <div class="divide-y divide-slate-50">
                     {#each group.applicants as app}
-                      <div class="flex items-center justify-between px-4 py-2">
-                        <span class="text-sm text-slate-700">{app.full_name}</span>
-                        <span class="text-xs text-slate-400 whitespace-nowrap">{fmtDate(app.created_at)}</span>
+                      <div class="flex items-center justify-between px-4 py-2 gap-2">
+                        <span class="text-sm text-slate-700 truncate">{app.full_name}</span>
+                        <span class="text-xs text-slate-400 whitespace-nowrap shrink-0">{fmtDate(app.created_at)}</span>
                       </div>
                     {/each}
                   </div>
@@ -323,8 +311,8 @@
 
       <!-- Top Recipients -->
       <div class="card">
-        <h2 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <Trophy size={16} class="text-yellow-500" /> Top Recipients
+        <h2 class="font-semibold text-gray-800 mb-4 flex items-center gap-2 text-sm sm:text-base">
+          <Trophy size={16} class="text-yellow-500 shrink-0" /> Top Recipients
         </h2>
         {#if mostAssisted.length === 0}
           <p class="text-gray-400 text-sm">No data available</p>
@@ -351,33 +339,31 @@
       </div>
     </div>
 
-    <!-- ── Second Row ── -->
+    <!-- Second Row -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-      <!-- Programs Nearly Full -->
+      <!-- Programs Slot Status -->
       <div class="card">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="font-semibold text-gray-800 flex items-center gap-2">
-            <AlertTriangle size={16} class="text-orange-500" /> Programs Slot Status
+          <h2 class="font-semibold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
+            <AlertTriangle size={16} class="text-orange-500 shrink-0" /> Programs Slot Status
           </h2>
-          <a href="/programs" class="text-xs font-medium hover:underline" style="color:#0A1F44;">
+          <a href="/programs" class="text-xs font-medium hover:underline shrink-0" style="color:#0A1F44;">
             View all →
           </a>
         </div>
-
         {#if nearlyFull.length === 0}
           <p class="text-gray-400 text-sm py-4 text-center">No active programs with beneficiaries yet</p>
         {:else}
           <div class="space-y-3">
             {#each nearlyFull as p}
               {@const pctVal = pct(p.slots_used, p.slots)}
-              <!-- FIX: link to /applications?program=id (not /programs/:id which 404s) -->
               <a href="/applications?program={p.id}"
                 class="block no-underline rounded-xl border border-slate-100 p-3
                        hover:bg-orange-50 hover:border-orange-200 transition-all cursor-pointer group">
-                <div class="flex justify-between items-start mb-2">
+                <div class="flex justify-between items-start mb-2 gap-2">
                   <span class="text-xs font-semibold text-slate-700 leading-tight
-                               group-hover:text-orange-700 transition-colors flex-1 mr-2">
+                               group-hover:text-orange-700 transition-colors flex-1">
                     {p.title}
                   </span>
                   {#if pctVal >= 100}
@@ -388,17 +374,14 @@
                     <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 shrink-0">Filling</span>
                   {/if}
                 </div>
-                <!-- Progress bar -->
                 <div class="h-2 bg-slate-100 rounded-full overflow-hidden mb-1.5">
                   <div class="h-full rounded-full transition-all"
                     style="width:{pctVal}%; background:{pctVal>=100?'#dc2626':pctVal>=75?'#f59e0b':'#0A1F44'};"></div>
                 </div>
                 <div class="flex justify-between text-xs">
-                  <span class="text-slate-400">{p.slots_used} / {p.slots} slots filled</span>
+                  <span class="text-slate-400">{p.slots_used} / {p.slots} slots</span>
                   <span class="font-semibold"
-                    style="color:{pctVal>=100?'#dc2626':pctVal>=75?'#d97706':'#0A1F44'}">
-                    {pctVal}%
-                  </span>
+                    style="color:{pctVal>=100?'#dc2626':pctVal>=75?'#d97706':'#0A1F44'}">{pctVal}%</span>
                 </div>
               </a>
             {/each}
@@ -408,8 +391,8 @@
 
       <!-- Newly Registered -->
       <div class="card">
-        <h2 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <UserPlus size={16} style="color:#0A1F44;" /> Newly Registered
+        <h2 class="font-semibold text-gray-800 mb-4 flex items-center gap-2 text-sm sm:text-base">
+          <UserPlus size={16} style="color:#0A1F44;" class="shrink-0" /> Newly Registered
         </h2>
         {#if recentUsers.length === 0}
           <p class="text-gray-400 text-sm">No new users</p>
@@ -434,8 +417,8 @@
 
       <!-- Recently Approved -->
       <div class="card">
-        <h2 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <ThumbsUp size={16} class="text-emerald-600" /> Recently Approved
+        <h2 class="font-semibold text-gray-800 mb-4 flex items-center gap-2 text-sm sm:text-base">
+          <ThumbsUp size={16} class="text-emerald-600 shrink-0" /> Recently Approved
         </h2>
         {#if recentApproved.length === 0}
           <p class="text-gray-400 text-sm">No recent approvals</p>
@@ -443,7 +426,7 @@
           <div class="space-y-2.5">
             {#each recentApproved as app}
               <div class="flex items-center gap-2.5">
-                <div class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
+                <div class="w-2 h-2 rounded-full bg-emerald-500 shrink-0 mt-1.5"></div>
                 <div class="flex-1 min-w-0">
                   <div class="text-sm font-medium truncate">{app.full_name}</div>
                   <div class="text-xs text-gray-400 truncate">{app.program_title}</div>

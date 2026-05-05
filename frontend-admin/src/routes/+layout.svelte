@@ -15,6 +15,7 @@
   import ChevronLeft     from 'lucide-svelte/icons/chevron-left';
   import ChevronRight    from 'lucide-svelte/icons/chevron-right';
   import ShieldAlert     from 'lucide-svelte/icons/shield-alert';
+  import Menu            from 'lucide-svelte/icons/menu';
   import X               from 'lucide-svelte/icons/x';
   import Eye             from 'lucide-svelte/icons/eye';
   import EyeOff          from 'lucide-svelte/icons/eye-off';
@@ -25,46 +26,39 @@
   import Pencil          from 'lucide-svelte/icons/pencil';
 
   let { children }: { children: Snippet } = $props();
-  let collapsed = $state(false);
+  let collapsed    = $state(false);
+  let mobileOpen   = $state(false);   // ← NEW: mobile drawer state
 
   // ── Account Edit Modal ─────────────────────────────────────────────────────
-  let showAccountModal  = $state(false);
-  let accountForm       = $state({ full_name: '', email: '' });
-  let passwordForm      = $state({ current: '', newPass: '', confirm: '' });
-  let showCurrent       = $state(false);
-  let showNew           = $state(false);
-  let showConfirm       = $state(false);
-  let accountLoading    = $state(false);
-  let accountError      = $state('');
-  let accountSuccess    = $state('');
-  let activeTab         = $state<'profile' | 'password'>('profile');
+  let showAccountModal = $state(false);
+  let accountForm      = $state({ full_name: '', email: '' });
+  let passwordForm     = $state({ current: '', newPass: '', confirm: '' });
+  let showCurrent      = $state(false);
+  let showNew          = $state(false);
+  let showConfirm      = $state(false);
+  let accountLoading   = $state(false);
+  let accountError     = $state('');
+  let accountSuccess   = $state('');
+  let activeTab        = $state<'profile' | 'password'>('profile');
 
   function openAccountModal() {
-    accountForm  = { full_name: ($user as any)?.full_name ?? '', email: ($user as any)?.email ?? '' };
-    passwordForm = { current: '', newPass: '', confirm: '' };
-    accountError = '';
+    accountForm   = { full_name: ($user as any)?.full_name ?? '', email: ($user as any)?.email ?? '' };
+    passwordForm  = { current: '', newPass: '', confirm: '' };
+    accountError  = '';
     accountSuccess = '';
-    activeTab = 'profile';
-    showCurrent = false;
-    showNew = false;
-    showConfirm = false;
+    activeTab     = 'profile';
+    showCurrent = showNew = showConfirm = false;
     showAccountModal = true;
   }
 
   async function saveProfile() {
-    if (!accountForm.full_name.trim()) {
-      accountError = 'Full name is required.';
-      return;
-    }
-    accountLoading = true;
-    accountError = '';
-    accountSuccess = '';
+    if (!accountForm.full_name.trim()) { accountError = 'Full name is required.'; return; }
+    accountLoading = true; accountError = ''; accountSuccess = '';
     try {
       await apiFetch(`/users/${($user as any).id}`, {
         method: 'PUT',
         body: { full_name: accountForm.full_name.trim(), email: accountForm.email.trim(), position: ($user as any)?.position }
       });
-      // Update local user store
       user.update(u => u ? { ...u, full_name: accountForm.full_name.trim(), email: accountForm.email.trim() } : u);
       localStorage.setItem('sk_user', JSON.stringify({ ...($user as any), full_name: accountForm.full_name.trim(), email: accountForm.email.trim() }));
       accountSuccess = 'Profile updated successfully!';
@@ -77,19 +71,17 @@
   }
 
   async function savePassword() {
-    accountError = '';
-    accountSuccess = '';
+    accountError = ''; accountSuccess = '';
     if (!passwordForm.current) { accountError = 'Current password is required.'; return; }
     if (passwordForm.newPass.length < 6) { accountError = 'New password must be at least 6 characters.'; return; }
     if (passwordForm.newPass !== passwordForm.confirm) { accountError = 'New passwords do not match.'; return; }
-
     accountLoading = true;
     try {
       await apiFetch('/auth/change-password', {
         method: 'POST',
         body: { current_password: passwordForm.current, new_password: passwordForm.newPass }
       });
-      passwordForm = { current: '', newPass: '', confirm: '' };
+      passwordForm  = { current: '', newPass: '', confirm: '' };
       accountSuccess = 'Password changed successfully!';
       setTimeout(() => accountSuccess = '', 3000);
     } catch (e) {
@@ -99,7 +91,6 @@
     }
   }
 
-  // Pages accessible to non-admin staff
   const STAFF_ROUTES = ['/', '/programs', '/applications', '/beneficiaries', '/search', '/reports'];
 
   onMount(() => {
@@ -112,39 +103,25 @@
   });
 
   const allNav = [
-    { href: '/',              icon: LayoutDashboard, label: 'Dashboard',      roles: ['admin', 'staff'] },
-    { href: '/programs',      icon: ClipboardList,   label: 'Programs',       roles: ['admin', 'staff'] },
-    { href: '/applications',  icon: FileText,        label: 'Applications',   roles: ['admin', 'staff'] },
-    { href: '/beneficiaries', icon: Users,           label: 'Beneficiaries',  roles: ['admin', 'staff'] },
-    { href: '/reports',       icon: BarChart2,       label: 'Reports',        roles: ['admin', 'staff'] },
-    { href: '/settings',      icon: Settings,        label: 'Settings',       roles: ['admin'] },
+    { href: '/',              icon: LayoutDashboard, label: 'Dashboard',     roles: ['admin', 'staff'] },
+    { href: '/programs',      icon: ClipboardList,   label: 'Programs',      roles: ['admin', 'staff'] },
+    { href: '/applications',  icon: FileText,        label: 'Applications',  roles: ['admin', 'staff'] },
+    { href: '/beneficiaries', icon: Users,           label: 'Beneficiaries', roles: ['admin', 'staff'] },
+    { href: '/reports',       icon: BarChart2,       label: 'Reports',       roles: ['admin', 'staff'] },
+    { href: '/settings',      icon: Settings,        label: 'Settings',      roles: ['admin'] },
   ];
 
-  let nav = $derived(
-    allNav.filter(item => item.roles.includes(($user as any)?.role ?? ''))
-  );
+  let nav = $derived(allNav.filter(item => item.roles.includes(($user as any)?.role ?? '')));
 
-  function handleLogout() {
-    logout();
-    goto('/login');
-  }
+  function handleLogout() { logout(); goto('/login'); }
+
+  // Close mobile drawer on navigation
+  function handleNavClick() { mobileOpen = false; }
 
   let currentRole     = $derived(($user as any)?.role     ?? '');
   let currentPosition = $derived(($user as any)?.position ?? '');
-
-  let positionLabel = $derived(
-    currentPosition
-      ? currentPosition
-      : currentRole === 'admin'
-        ? 'SK Chairperson'
-        : 'SK Staff'
-  );
-
-  let roleBadgeColor = $derived(
-    currentRole === 'admin'
-      ? 'bg-purple-500/20 text-purple-200'
-      : 'bg-blue-500/20 text-blue-200'
-  );
+  let positionLabel   = $derived(currentPosition || (currentRole === 'admin' ? 'SK Chairperson' : 'SK Staff'));
+  let roleBadgeColor  = $derived(currentRole === 'admin' ? 'bg-purple-500/20 text-purple-200' : 'bg-blue-500/20 text-blue-200');
 </script>
 
 <!-- ── Account Edit Modal ──────────────────────────────────────────────────── -->
@@ -152,7 +129,6 @@
   <div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(10,31,68,0.55);">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
 
-      <!-- Modal Header -->
       <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100" style="background: #0A1F44;">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-base"
@@ -170,7 +146,6 @@
         </button>
       </div>
 
-      <!-- Tabs -->
       <div class="flex border-b border-slate-100">
         <button
           onclick={() => { activeTab = 'profile'; accountError = ''; accountSuccess = ''; }}
@@ -187,8 +162,6 @@
       </div>
 
       <div class="px-6 py-5">
-
-        <!-- Alerts -->
         {#if accountError}
           <div class="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">{accountError}</div>
         {/if}
@@ -197,12 +170,9 @@
         {/if}
 
         {#if activeTab === 'profile'}
-          <!-- Profile Tab -->
           <div class="space-y-4">
             <div>
-              <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5" for="am_fn">
-                Full Name *
-              </label>
+              <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5" for="am_fn">Full Name *</label>
               <div class="relative">
                 <User size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input id="am_fn" bind:value={accountForm.full_name}
@@ -211,9 +181,7 @@
               </div>
             </div>
             <div>
-              <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5" for="am_em">
-                Email Address
-              </label>
+              <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5" for="am_em">Email Address</label>
               <div class="relative">
                 <Mail size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input id="am_em" type="email" bind:value={accountForm.email}
@@ -221,7 +189,6 @@
                   placeholder="your@email.com" />
               </div>
             </div>
-            <!-- Read-only info -->
             <div class="bg-slate-50 rounded-xl px-4 py-3 space-y-1.5">
               <div class="flex items-center justify-between text-xs">
                 <span class="text-slate-400">Username</span>
@@ -237,7 +204,6 @@
               </div>
             </div>
           </div>
-
           <div class="flex gap-2 mt-5">
             <button onclick={saveProfile} disabled={accountLoading}
               class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
@@ -251,12 +217,16 @@
           </div>
 
         {:else}
-          <!-- Password Tab -->
           <div class="space-y-4">
+            {#each [
+              { id: 'am_cur', label: 'Current Password *', bind: 'current', show: showCurrent, toggle: () => showCurrent = !showCurrent },
+              { id: 'am_new', label: 'New Password *', bind: 'newPass', show: showNew, toggle: () => showNew = !showNew },
+              { id: 'am_conf', label: 'Confirm New Password *', bind: 'confirm', show: showConfirm, toggle: () => showConfirm = !showConfirm },
+            ] as _f}
+              <!-- password fields rendered individually below for bind: to work -->
+            {/each}
             <div>
-              <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5" for="am_cur">
-                Current Password *
-              </label>
+              <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5" for="am_cur">Current Password *</label>
               <div class="relative">
                 <Lock size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input id="am_cur" type={showCurrent ? 'text' : 'password'} bind:value={passwordForm.current}
@@ -269,9 +239,7 @@
               </div>
             </div>
             <div>
-              <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5" for="am_new">
-                New Password *
-              </label>
+              <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5" for="am_new">New Password *</label>
               <div class="relative">
                 <Lock size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input id="am_new" type={showNew ? 'text' : 'password'} bind:value={passwordForm.newPass}
@@ -284,9 +252,7 @@
               </div>
             </div>
             <div>
-              <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5" for="am_conf">
-                Confirm New Password *
-              </label>
+              <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5" for="am_conf">Confirm New Password *</label>
               <div class="relative">
                 <Lock size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input id="am_conf" type={showConfirm ? 'text' : 'password'} bind:value={passwordForm.confirm}
@@ -299,7 +265,6 @@
               </div>
             </div>
           </div>
-
           <div class="flex gap-2 mt-5">
             <button onclick={savePassword} disabled={accountLoading}
               class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
@@ -324,14 +289,29 @@
 {:else if $user}
   <div class="flex h-screen overflow-hidden" style="background: #F5F7FA;">
 
-    <!-- Sidebar -->
+    <!-- ── Mobile overlay backdrop ── -->
+    {#if mobileOpen}
+      <button
+        type="button"
+        aria-label="Close sidebar"
+        class="fixed inset-0 z-30 bg-black/50 lg:hidden"
+        onclick={() => mobileOpen = false}
+      ></button>
+    {/if}
+
+    <!-- ── Sidebar ── -->
     <aside
-      class="{collapsed ? 'w-17.5' : 'w-60'} flex flex-col shrink-0 transition-all duration-300 ease-in-out"
+      class="
+        fixed inset-y-0 left-0 z-40 flex flex-col shrink-0 transition-all duration-300 ease-in-out
+        lg:static lg:z-auto
+        {collapsed ? 'lg:w-17.5' : 'lg:w-60'}
+        {mobileOpen ? 'w-60 translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      "
       style="background: #0A1F44;"
     >
       <!-- Logo -->
       <div class="flex items-center px-4 py-4 border-b border-white/10
-                  {collapsed ? 'justify-center' : 'justify-between'}">
+                  {collapsed ? 'lg:justify-center' : 'justify-between'}">
         {#if !collapsed}
           <div class="flex items-center gap-3 min-w-0">
             <img src="/logo.png" alt="SK Logo" class="w-12 h-12 object-contain shrink-0 drop-shadow-md" />
@@ -340,20 +320,35 @@
             </span>
           </div>
         {:else}
-          <img src="/logo.png" alt="SK Logo" class="w-10 h-10 object-contain drop-shadow-md" />
+          <img src="/logo.png" alt="SK Logo" class="w-10 h-10 object-contain drop-shadow-md hidden lg:block" />
+          <!-- On mobile when collapsed state doesn't apply, show full logo -->
+          <div class="flex items-center gap-3 min-w-0 lg:hidden">
+            <img src="/logo.png" alt="SK Logo" class="w-12 h-12 object-contain shrink-0 drop-shadow-md" />
+            <span class="text-xs font-bold text-white leading-snug">
+              SK Beneficiary<br/>Tracking and<br/>Management System
+            </span>
+          </div>
         {/if}
+        <!-- Desktop collapse button -->
         <button
           onclick={() => collapsed = !collapsed}
-          class="p-1.5 rounded-lg transition text-white/40 hover:text-white hover:bg-white/10 shrink-0
-                 {collapsed ? 'hidden' : ''}"
+          class="p-1.5 rounded-lg transition text-white/40 hover:text-white hover:bg-white/10 shrink-0 hidden lg:flex
+                 {collapsed ? 'lg:hidden' : ''}"
         >
           <ChevronLeft size={15} />
+        </button>
+        <!-- Mobile close button -->
+        <button
+          onclick={() => mobileOpen = false}
+          class="p-1.5 rounded-lg transition text-white/40 hover:text-white hover:bg-white/10 shrink-0 lg:hidden"
+        >
+          <X size={15} />
         </button>
       </div>
 
       {#if collapsed}
         <button onclick={() => collapsed = !collapsed}
-          class="mx-auto mt-3 p-1.5 rounded-lg transition text-white/40 hover:text-white hover:bg-white/10">
+          class="mx-auto mt-3 p-1.5 rounded-lg transition text-white/40 hover:text-white hover:bg-white/10 hidden lg:flex">
           <ChevronRight size={15} />
         </button>
       {/if}
@@ -370,14 +365,15 @@
           {@const active = ($page.url.pathname as string) === item.href}
           <a
             href={item.href}
+            onclick={handleNavClick}
             title={collapsed ? item.label : ''}
             class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150
-                   {collapsed ? 'justify-center' : ''}
+                   {collapsed ? 'lg:justify-center' : ''}
                    {active ? 'text-white' : 'text-white/60 hover:text-white hover:bg-white/10'}"
             style={active ? 'background: rgba(255,255,255,0.15);' : ''}
           >
             <item.icon size={18} class="shrink-0" />
-            {#if !collapsed}<span>{item.label}</span>{/if}
+            <span class="{collapsed ? 'lg:hidden' : ''}">{item.label}</span>
           </a>
         {/each}
       </nav>
@@ -390,7 +386,6 @@
           </div>
         {/if}
 
-        <!-- Clickable account card -->
         {#if !collapsed}
           <button
             onclick={openAccountModal}
@@ -398,7 +393,6 @@
             style="background: rgba(255,255,255,0.08);"
             onmouseenter={(e) => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.13)'}
             onmouseleave={(e) => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'}
-            title="Edit your account"
           >
             <div class="flex items-center justify-between gap-1 mb-0.5">
               <div class="text-[10px] text-white/40">Logged in as</div>
@@ -413,12 +407,8 @@
             <div class="text-[10px] text-white/30">@{($user as any).username}</div>
           </button>
         {:else}
-          <!-- Collapsed: just avatar button -->
-          <button
-            onclick={openAccountModal}
-            class="flex justify-center w-full py-1 group"
-            title="Edit account"
-          >
+          <button onclick={openAccountModal}
+            class="flex justify-center w-full py-1 group hidden lg:flex" title="Edit account">
             <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white transition group-hover:bg-white/25"
                  style="background:rgba(255,255,255,0.15);">
               {(($user as any).full_name ?? 'A').charAt(0)}
@@ -426,7 +416,6 @@
           </button>
         {/if}
 
-        <!-- Staff restriction notice -->
         {#if !collapsed && currentRole === 'staff'}
           <div class="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] text-white/40"
                style="background:rgba(255,255,255,0.05);">
@@ -440,20 +429,44 @@
           title={collapsed ? 'Sign out' : ''}
           class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition
                  text-white/60 hover:bg-red-500/20 hover:text-red-300
-                 {collapsed ? 'justify-center' : ''}"
+                 {collapsed ? 'lg:justify-center' : ''}"
         >
           <LogOut size={16} class="shrink-0" />
-          {#if !collapsed}<span>Sign out</span>{/if}
+          <span class="{collapsed ? 'lg:hidden' : ''}">Sign out</span>
         </button>
       </div>
     </aside>
 
-    <!-- Main -->
-    <main class="flex-1 overflow-y-auto" style="background: #F5F7FA;">
-      {@render children()}
-    </main>
+    <!-- ── Main content area ── -->
+    <div class="flex flex-col flex-1 min-w-0 overflow-hidden">
+
+      <!-- ── Mobile topbar ── -->
+      <header class="flex items-center gap-3 px-4 py-3 border-b border-slate-200 lg:hidden shrink-0"
+              style="background: #0A1F44;">
+        <button
+          onclick={() => mobileOpen = true}
+          class="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition"
+        >
+          <Menu size={20} />
+        </button>
+        <div class="flex items-center gap-2 flex-1 min-w-0">
+          <img src="/logo.png" alt="SK Logo" class="w-7 h-7 object-contain" />
+          <span class="text-sm font-bold text-white truncate">SK Portal</span>
+        </div>
+        <button onclick={openAccountModal}
+          class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+          style="background: rgba(255,255,255,0.15);">
+          {(($user as any)?.full_name ?? 'A').charAt(0)}
+        </button>
+      </header>
+
+      <!-- ── Page content ── -->
+      <main class="flex-1 overflow-y-auto" style="background: #F5F7FA;">
+        {@render children()}
+      </main>
+    </div>
+
   </div>
 {:else}
-  <!-- not logged in and not a public page — redirect handled by onMount -->
   {@render children()}
 {/if}

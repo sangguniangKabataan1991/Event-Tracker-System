@@ -96,7 +96,7 @@
           </div>
           <p class="text-white font-semibold text-sm mb-2">Password Reset!</p>
           <p class="text-white/40 text-xs leading-relaxed mb-4">
-            Matagumpay na na-reset ang iyong password. Ire-redirect ka sa login page in 3 seconds.
+            Your password has been successfully reset. You will be redirected to the login page in 3 seconds.
           </p>
           <a href="/login" class="text-xs underline" style="color: rgba(255,255,255,0.5);">
             Go to Login now →
@@ -124,10 +124,10 @@
         <p class="text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">Set New Password</p>
         {#if fullName}
           <p class="text-white/40 text-xs mb-5">
-            Kamusta <span class="text-white/70">{fullName}</span>, pumili ng bagong password.
+            Hi <span class="text-white/70">{fullName}</span>, please choose a new password.
           </p>
         {:else}
-          <p class="text-white/40 text-xs mb-5">Pumili ng bagong password para sa iyong account.</p>
+          <p class="text-white/40 text-xs mb-5">Choose a new password for your account.</p>
         {/if}
 
         <form onsubmit={(e) => { e.preventDefault(); handleReset(); }} class="space-y-3">

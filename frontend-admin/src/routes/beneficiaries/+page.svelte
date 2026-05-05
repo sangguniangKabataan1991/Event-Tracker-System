@@ -219,7 +219,7 @@
 <dialog
   bind:this={dialogEl}
   onkeydown={handleDialogKeydown}
-  class="p-0 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] backdrop:bg-black/40 backdrop:backdrop-blur-sm open:flex open:flex-col"
+  class="p-0 rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] backdrop:bg-black/40 backdrop:backdrop-blur-sm open:flex open:flex-col"
   style="border:none;"
 >
   {#if showProfile}
@@ -322,7 +322,7 @@
   {/if}
 </dialog>
 
-<div class="space-y-5 p-6">
+<div class="space-y-5 p-4 sm:p-6">
 
   <!-- Page Header -->
   <div class="flex flex-wrap items-start justify-between gap-3">
