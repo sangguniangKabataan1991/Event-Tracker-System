@@ -3,7 +3,7 @@
     import { goto } from '$app/navigation';
     import { user, logout } from '$lib/api.js';
     import { page } from '$app/stores';
-    import { LogOut, LayoutList, Building2 } from 'lucide-svelte';
+    import { LogOut, LayoutList } from 'lucide-svelte';
 
     let { children } = $props();
 
@@ -33,7 +33,7 @@
                 <!-- Left -->
                 <a href="/" class="group flex items-center gap-2.5">
                     <div class="rounded-lg p-1.5 transition" style="background:rgba(255,255,255,0.10);">
-                        <Building2 class="h-5 w-5" style="color:rgba(255,255,255,0.85);" />
+                        <img src="\logo.png" alt="Logo" class="h-6 w-6 object-contain" />
                     </div>
                     <div>
                         <div class="text-sm font-bold tracking-wide">SK Portal</div>

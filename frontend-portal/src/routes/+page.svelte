@@ -10,24 +10,9 @@
 		LogIn,
 		Users,
 		CalendarDays,
-		ChevronRight,
-		Clipboard
+		ChevronRight
 	} from 'lucide-svelte';
 
-	/**
-	 * @typedef {{
-	 *   id: number,
-	 *   title: string,
-	 *   category: string,
-	 *   description: string,
-	 *   slots: number,
-	 *   slots_used: number,
-	 *   start_date: string | null,
-	 *   requirements: string | null
-	 * }} Program
-	 */
-
-	/** @type {Program[]} */
 	let programs = $state([]);
 	let loading = $state(true);
 	let error = $state('');
@@ -51,13 +36,16 @@
 	>
 		<div class="mb-3 flex justify-center">
 			<div class="rounded-2xl p-3" style="background: rgba(255,255,255,0.10);">
-				<Clipboard class="h-10 w-10" style="color: rgba(255,255,255,0.85);" />
+				<img src="/logo.png" alt="Logo" class="h-12 w-12 object-contain" />
 			</div>
 		</div>
+
 		<h1 class="mb-2 text-2xl font-bold tracking-tight">SK Beneficiary Programs</h1>
+
 		<p class="mx-auto max-w-sm text-sm" style="color: rgba(255,255,255,0.65);">
 			Apply for available SK programs and manage your applications easily through our portal.
 		</p>
+
 		{#if !$user}
 			<div class="mt-5 flex justify-center gap-3">
 				<a
@@ -68,6 +56,7 @@
 					<UserPlus class="h-4 w-4" />
 					Register
 				</a>
+
 				<a
 					href="/login"
 					class="flex items-center gap-2 rounded-lg border px-5 py-2 text-sm text-white transition"
@@ -92,6 +81,7 @@
 				></div>
 				Loading programs...
 			</div>
+
 		{:else if error}
 			<div
 				class="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
@@ -99,43 +89,49 @@
 				<CircleAlert class="h-4 w-4 shrink-0" />
 				{error}
 			</div>
+
 		{:else if programs.length === 0}
 			<div class="rounded-2xl border border-slate-200 bg-white py-16 text-center shadow-sm">
 				<Inbox class="mx-auto mb-3 h-10 w-10 text-slate-300" />
 				<p class="font-medium text-slate-500">No available programs at the moment.</p>
 				<p class="mt-1 text-sm text-slate-400">Please check back later!</p>
 			</div>
+
 		{:else}
 			<div class="grid gap-4">
 				{#each programs as program}
 					<div
 						class="rounded-2xl border border-slate-200 bg-white p-5 transition-all hover:shadow-md"
-						style="hover:border-color: #0A1F44;"
 					>
 						<div class="flex items-start justify-between gap-4">
 							<div class="min-w-0 flex-1">
 								<div class="mb-1 flex flex-wrap items-center gap-2">
 									<h3 class="font-semibold text-slate-900">{program.title}</h3>
+
 									<span
 										class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"
 									>
 										<CircleCheck class="h-3 w-3" /> OPEN
 									</span>
-									<span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
-										>{program.category}</span
-									>
+
+									<span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+										{program.category}
+									</span>
 								</div>
+
 								<p class="mb-3 text-sm text-slate-500">
 									{program.description || 'Walang detalye.'}
 								</p>
+
 								<div class="flex flex-wrap gap-4 text-xs text-slate-500">
 									<span class="flex items-center gap-1">
 										<Users class="h-3.5 w-3.5" />
 										Slots:
-										<strong class="ml-0.5 text-slate-700"
-											>{program.slots - program.slots_used} remaining of {program.slots}</strong
-										>
+										<strong class="ml-0.5 text-slate-700">
+											{program.slots - program.slots_used} remaining of {program.slots}
+										</strong>
 									</span>
+
 									{#if program.start_date}
 										<span class="flex items-center gap-1">
 											<CalendarDays class="h-3.5 w-3.5" />
@@ -143,10 +139,10 @@
 										</span>
 									{/if}
 								</div>
+
 								{#if program.requirements}
 									<div class="mt-2 text-xs text-slate-500">
-										<strong>Requirements:</strong>
-										{program.requirements}
+										<strong>Requirements:</strong> {program.requirements}
 									</div>
 								{/if}
 							</div>
@@ -156,8 +152,9 @@
 									{#if program.slots_used >= program.slots}
 										<span
 											class="block rounded-lg bg-slate-100 px-3 py-2 text-center text-xs text-slate-400"
-											>Fully booked</span
 										>
+											Fully booked
+										</span>
 									{:else}
 										<a
 											href="/apply/{program.id}"
