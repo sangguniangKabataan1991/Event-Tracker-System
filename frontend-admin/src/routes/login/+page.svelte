@@ -144,7 +144,5 @@
         </button>
       </form>
     </div>
-
-    <p class="text-white/20 text-xs mt-5">Default: admin / admin123</p>
   </div>
 </div>

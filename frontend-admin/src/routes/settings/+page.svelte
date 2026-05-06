@@ -17,6 +17,7 @@
   import Building2 from 'lucide-svelte/icons/building-2';
   import BadgeCheck from 'lucide-svelte/icons/badge-check';
   import Mail from 'lucide-svelte/icons/mail';
+  import AlertTriangle from 'lucide-svelte/icons/alert-triangle';
 
   interface Category    { name: string; }
   interface UserRow     { id: number; full_name: string; username: string; role: string; position: string | null; email: string | null; }
@@ -26,7 +27,6 @@
     contact: string; address: string; municipality: string;
   }
 
-  // ── Preset SK positions ────────────────────────────────────────────────────
   const POSITION_PRESETS = [
     'SK Chairperson',
     'SK Kagawad',
@@ -56,12 +56,17 @@
   // Edit User modal
   let showEditUser     = $state(false);
   let editingUser      = $state<UserRow | null>(null);
-  let editForm         = $state({ full_name: '', position: '', password: '', email: '' });
+  let editForm         = $state({ full_name: '', username: '', position: '', password: '', email: '' });
   let editCustomPos    = $state('');
   let editUsingCustom  = $state(false);
   let editShowPassword = $state(false);
   let editFormError    = $state('');
   let editFormLoading  = $state(false);
+
+  // Delete confirm modal
+  let showDeleteConfirm = $state(false);
+  let deletingUser      = $state<UserRow | null>(null);
+  let deleteLoading     = $state(false);
 
   // Barangay info
   let editingBarangay = $state(false);
@@ -130,7 +135,7 @@
     if (!userForm.full_name || !userForm.username || !userForm.password)
       return void (userFormError = 'Full name, username, and password are required.');
     if (!userForm.email.trim())
-      return void (userFormError = 'Email address is required. It will be used to identify and contact the officer.');
+      return void (userFormError = 'Email address is required.');
     if (userForm.password.length < 6)
       return void (userFormError = 'Password must be at least 6 characters.');
     if (!position)
@@ -150,7 +155,7 @@
       });
       users = await apiFetch('/users');
       showAddUser = false;
-      flash('User account created! A welcome email has been sent.');
+      flash('User account created!');
     } catch (e) { userFormError = e instanceof Error ? e.message : 'Error creating user'; }
     finally { userFormLoading = false; }
   }
@@ -159,7 +164,7 @@
   function openEditUser(u: UserRow) {
     editingUser = u;
     const isPreset = POSITION_PRESETS.includes(u.position ?? '');
-    editForm         = { full_name: u.full_name, position: isPreset ? (u.position ?? '') : '', password: '', email: u.email ?? '' };
+    editForm         = { full_name: u.full_name, username: u.username, position: isPreset ? (u.position ?? '') : '', password: '', email: u.email ?? '' };
     editCustomPos    = isPreset ? '' : (u.position ?? '');
     editUsingCustom  = !isPreset && !!u.position;
     editFormError    = '';
@@ -184,8 +189,10 @@
 
     if (!editForm.full_name)
       return void (editFormError = 'Full name is required.');
+    if (!editForm.username.trim())
+      return void (editFormError = 'Username is required.');
     if (!editForm.email.trim())
-      return void (editFormError = 'Email address is required. It is used to uniquely identify the officer.');
+      return void (editFormError = 'Email address is required.');
     if (!position)
       return void (editFormError = 'Please select or enter a position.');
     if (editForm.password && editForm.password.length < 6)
@@ -197,6 +204,7 @@
         method: 'PUT',
         body: {
           full_name: editForm.full_name,
+          username:  editForm.username.trim(),
           position,
           password:  editForm.password,
           email:     editForm.email.trim(),
@@ -210,13 +218,30 @@
   }
 
   // ── Delete User ────────────────────────────────────────────────────────────
-  async function deleteUser(u: UserRow) {
-    if (!confirm(`Delete account of "${u.full_name}" (@${u.username})?`)) return;
+  function openDeleteConfirm(u: UserRow) {
+    deletingUser      = u;
+    deleteLoading     = false;
+    showDeleteConfirm = true;
+  }
+
+  async function confirmDeleteUser() {
+    if (!deletingUser) return;
+    deleteLoading = true;
     try {
-      await apiFetch(`/users/${u.id}`, { method: 'DELETE' });
+      await apiFetch(`/users/${deletingUser.id}`, { method: 'DELETE' });
+      // Optimistically remove from list immediately
+      users = users.filter(u => u.id !== deletingUser!.id);
+      // Then re-fetch to confirm sync with server
       users = await apiFetch('/users');
-      flash('User deleted.');
-    } catch (e) { flash(e instanceof Error ? e.message : 'Error deleting user', 'error'); }
+      showDeleteConfirm = false;
+      deletingUser = null;
+      flash('Account deleted successfully.');
+    } catch (e) {
+      flash(e instanceof Error ? e.message : 'Error deleting user', 'error');
+      showDeleteConfirm = false;
+    } finally {
+      deleteLoading = false;
+    }
   }
 
   // ── Barangay Info ──────────────────────────────────────────────────────────
@@ -264,6 +289,55 @@
   {/if}
 
   <!-- ══════════════════════════════════════════════════════════════════════
+       DELETE CONFIRM MODAL
+  ══════════════════════════════════════════════════════════════════════ -->
+  {#if showDeleteConfirm && deletingUser}
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(10,31,68,0.55);">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+        <div class="flex flex-col items-center text-center mb-5">
+          <div class="w-14 h-14 rounded-full flex items-center justify-center mb-3" style="background:#FEF2F2;">
+            <AlertTriangle size={28} class="text-red-500" />
+          </div>
+          <h2 class="text-lg font-bold text-gray-900">Delete Account?</h2>
+          <p class="text-sm text-gray-500 mt-1">
+            You are about to permanently delete the account of
+            <span class="font-semibold text-gray-800">{deletingUser.full_name}</span>.
+            This cannot be undone.
+          </p>
+        </div>
+
+        <!-- User preview -->
+        <div class="bg-gray-50 rounded-xl px-4 py-3 mb-5 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+               style="background:#0A1F44;">
+            {deletingUser.full_name.charAt(0)}
+          </div>
+          <div class="min-w-0">
+            <div class="text-sm font-semibold text-gray-900 truncate">{deletingUser.full_name}</div>
+            <div class="text-xs text-gray-400 truncate">@{deletingUser.username} · {displayPosition(deletingUser)}</div>
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <button
+            onclick={confirmDeleteUser}
+            disabled={deleteLoading}
+            class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+            style="background:#DC2626;">
+            <Trash2 size={14} /> {deleteLoading ? 'Deleting...' : 'Yes, Delete'}
+          </button>
+          <button
+            onclick={() => { showDeleteConfirm = false; deletingUser = null; }}
+            disabled={deleteLoading}
+            class="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition disabled:opacity-60">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- ══════════════════════════════════════════════════════════════════════
        ADD USER MODAL
   ══════════════════════════════════════════════════════════════════════ -->
   {#if showAddUser}
@@ -283,39 +357,23 @@
         {/if}
 
         <div class="space-y-4">
-          <!-- Full Name -->
           <div>
             <label class="label" for="add_fn">Full Name *</label>
             <input id="add_fn" bind:value={userForm.full_name} class="input" placeholder="e.g. Juan Dela Cruz" required />
           </div>
-
-          <!-- Username -->
           <div>
             <label class="label" for="add_un">Username *</label>
             <input id="add_un" bind:value={userForm.username} class="input" placeholder="e.g. jdelacruz" required />
           </div>
-
-          <!-- Email — REQUIRED -->
           <div>
             <label class="label" for="add_em">
-              <span class="flex items-center gap-1.5">
-                <Mail size={13} class="text-gray-400" /> Email Address *
-              </span>
+              <span class="flex items-center gap-1.5"><Mail size={13} class="text-gray-400" /> Email Address *</span>
             </label>
-            <input
-              id="add_em"
-              type="email"
-              bind:value={userForm.email}
-              class="input"
-              placeholder="e.g. juan@gmail.com"
-              required
-            />
+            <input id="add_em" type="email" bind:value={userForm.email} class="input" placeholder="e.g. juan@gmail.com" required />
             <p class="text-xs text-gray-400 mt-1 flex items-center gap-1">
               <Mail size={11} /> Used to uniquely identify the officer and send login credentials.
             </p>
           </div>
-
-          <!-- Password -->
           <div>
             <label class="label" for="add_pw">Password *</label>
             <div class="relative">
@@ -327,47 +385,30 @@
               </button>
             </div>
           </div>
-
-          <!-- Position -->
           <div>
             <label class="label flex items-center gap-1.5">
               <BadgeCheck size={13} class="text-gray-400" /> Position / Role *
             </label>
             <p class="text-xs text-gray-400 mb-2">Select a preset or enter a custom position title.</p>
-
             <div class="flex flex-wrap gap-2 mb-3">
               {#each POSITION_PRESETS as preset}
-                <button
-                  type="button"
-                  onclick={() => handleAddPreset(preset)}
+                <button type="button" onclick={() => handleAddPreset(preset)}
                   class="px-3 py-1.5 rounded-lg text-xs font-medium border transition
                     {!usingCustomPos && userForm.position === preset
                       ? 'border-[#0A1F44] bg-[#0A1F44] text-white'
-                      : 'border-gray-200 text-gray-600 hover:border-[#0A1F44]/40 hover:bg-[#0A1F44]/5'}"
-                >
+                      : 'border-gray-200 text-gray-600 hover:border-[#0A1F44]/40 hover:bg-[#0A1F44]/5'}">
                   {preset}
                 </button>
               {/each}
-              <button
-                type="button"
-                onclick={() => handleAddPreset('__custom__')}
+              <button type="button" onclick={() => handleAddPreset('__custom__')}
                 class="px-3 py-1.5 rounded-lg text-xs font-medium border transition
-                  {usingCustomPos
-                    ? 'border-[#0A1F44] bg-[#0A1F44] text-white'
-                    : 'border-dashed border-gray-300 text-gray-500 hover:border-[#0A1F44]/40'}"
-              >
+                  {usingCustomPos ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-dashed border-gray-300 text-gray-500 hover:border-[#0A1F44]/40'}">
                 Other…
               </button>
             </div>
-
             {#if usingCustomPos}
-              <input
-                bind:value={customPosition}
-                class="input"
-                placeholder="e.g. SK Youth Rep, SK Committee Head..."
-              />
+              <input bind:value={customPosition} class="input" placeholder="e.g. SK Youth Rep, SK Committee Head..." />
             {/if}
-
             {#if !usingCustomPos && userForm.position}
               <div class="mt-2 flex items-center gap-1.5 text-xs text-[#0A1F44] font-medium">
                 <BadgeCheck size={12} /> Selected: <span class="font-bold">{userForm.position}</span>
@@ -412,70 +453,46 @@
         {/if}
 
         <div class="space-y-4">
-          <!-- Full Name -->
           <div>
             <label class="label" for="edit_fn">Full Name *</label>
             <input id="edit_fn" bind:value={editForm.full_name} class="input" required />
           </div>
-
-          <!-- Email — REQUIRED -->
+          <div>
+            <label class="label" for="edit_un">Username *</label>
+            <input id="edit_un" bind:value={editForm.username} class="input" placeholder="e.g. jdelacruz" required />
+          </div>
           <div>
             <label class="label" for="edit_em">
-              <span class="flex items-center gap-1.5">
-                <Mail size={13} class="text-gray-400" /> Email Address *
-              </span>
+              <span class="flex items-center gap-1.5"><Mail size={13} class="text-gray-400" /> Email Address *</span>
             </label>
-            <input
-              id="edit_em"
-              type="email"
-              bind:value={editForm.email}
-              class="input"
-              placeholder="e.g. juan@gmail.com"
-              required
-            />
+            <input id="edit_em" type="email" bind:value={editForm.email} class="input" placeholder="e.g. juan@gmail.com" required />
             <p class="text-xs text-gray-400 mt-1 flex items-center gap-1">
               <Mail size={11} /> Used to uniquely identify this officer across the system.
             </p>
           </div>
-
-          <!-- Position -->
           <div>
             <label class="label flex items-center gap-1.5">
               <BadgeCheck size={13} class="text-gray-400" /> Position / Role *
             </label>
             <div class="flex flex-wrap gap-2 mb-3">
               {#each POSITION_PRESETS as preset}
-                <button
-                  type="button"
-                  onclick={() => handleEditPreset(preset)}
+                <button type="button" onclick={() => handleEditPreset(preset)}
                   class="px-3 py-1.5 rounded-lg text-xs font-medium border transition
                     {!editUsingCustom && editForm.position === preset
                       ? 'border-[#0A1F44] bg-[#0A1F44] text-white'
-                      : 'border-gray-200 text-gray-600 hover:border-[#0A1F44]/40 hover:bg-[#0A1F44]/5'}"
-                >
+                      : 'border-gray-200 text-gray-600 hover:border-[#0A1F44]/40 hover:bg-[#0A1F44]/5'}">
                   {preset}
                 </button>
               {/each}
-              <button
-                type="button"
-                onclick={() => handleEditPreset('__custom__')}
+              <button type="button" onclick={() => handleEditPreset('__custom__')}
                 class="px-3 py-1.5 rounded-lg text-xs font-medium border transition
-                  {editUsingCustom
-                    ? 'border-[#0A1F44] bg-[#0A1F44] text-white'
-                    : 'border-dashed border-gray-300 text-gray-500 hover:border-[#0A1F44]/40'}"
-              >
+                  {editUsingCustom ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-dashed border-gray-300 text-gray-500 hover:border-[#0A1F44]/40'}">
                 Other…
               </button>
             </div>
-
             {#if editUsingCustom}
-              <input
-                bind:value={editCustomPos}
-                class="input"
-                placeholder="e.g. SK Youth Rep, SK Committee Head..."
-              />
+              <input bind:value={editCustomPos} class="input" placeholder="e.g. SK Youth Rep, SK Committee Head..." />
             {/if}
-
             {#if !editUsingCustom && editForm.position}
               <div class="mt-2 flex items-center gap-1.5 text-xs text-[#0A1F44] font-medium">
                 <BadgeCheck size={12} /> Selected: <span class="font-bold">{editForm.position}</span>
@@ -486,12 +503,9 @@
               </div>
             {/if}
           </div>
-
-          <!-- New Password -->
           <div>
             <label class="label" for="edit_pw">
-              New Password
-              <span class="text-gray-400 font-normal">(leave blank to keep current)</span>
+              New Password <span class="text-gray-400 font-normal">(leave blank to keep current)</span>
             </label>
             <div class="relative">
               <input id="edit_pw" type={editShowPassword ? 'text' : 'password'}
@@ -525,10 +539,8 @@
         <Building2 size={16} style="color:#0A1F44;" /> Barangay Information
       </h2>
       {#if !editingBarangay}
-        <button
-          onclick={() => editingBarangay = true}
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#0A1F44] border border-[#0A1F44]/20 hover:bg-[#0A1F44]/5 transition"
-        >
+        <button onclick={() => editingBarangay = true}
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#0A1F44] border border-[#0A1F44]/20 hover:bg-[#0A1F44]/5 transition">
           <Pencil size={13} /> Edit
         </button>
       {/if}
@@ -538,24 +550,23 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="label" for="bi_brgy">Barangay Name *</label>
-          <input id="bi_brgy" bind:value={barangayInfo.barangay_name} class="input" placeholder="e.g. Barangay Sto. Niño" />
+          <input id="bi_brgy" bind:value={barangayInfo.barangay_name} class="input" />
         </div>
         <div>
           <label class="label" for="bi_mun">Municipality / City</label>
-          <input id="bi_mun" bind:value={barangayInfo.municipality} class="input" placeholder="e.g. Olongapo City" />
+          <input id="bi_mun" bind:value={barangayInfo.municipality} class="input" />
         </div>
         <div>
           <label class="label" for="bi_chair">SK Chairperson</label>
-          <input id="bi_chair" bind:value={barangayInfo.sk_chairperson} class="input" placeholder="e.g. Juan Dela Cruz" />
+          <input id="bi_chair" bind:value={barangayInfo.sk_chairperson} class="input" />
         </div>
         <div>
           <label class="label" for="bi_contact">Contact Number</label>
-          <input id="bi_contact" bind:value={barangayInfo.contact} class="input" placeholder="09XXXXXXXXX" />
+          <input id="bi_contact" bind:value={barangayInfo.contact} class="input" />
         </div>
         <div class="md:col-span-2">
           <label class="label" for="bi_addr">Full Address</label>
-          <input id="bi_addr" bind:value={barangayInfo.address} class="input"
-            placeholder="e.g. Zone 1, Barangay Sto. Niño, Olongapo City" />
+          <input id="bi_addr" bind:value={barangayInfo.address} class="input" />
         </div>
       </div>
       <div class="flex gap-2 mt-4">
@@ -642,11 +653,9 @@
           <div class="flex items-center gap-2 p-2.5 rounded-xl bg-gray-50 group hover:bg-[#0A1F44]/5 transition">
             <span class="w-2 h-2 rounded-full shrink-0" style="background:#0A1F44;"></span>
             <span class="text-sm flex-1">{cat.name}</span>
-            <button
-              onclick={() => deleteCategory(cat.name)}
+            <button onclick={() => deleteCategory(cat.name)}
               class="opacity-0 group-hover:opacity-100 transition p-1 rounded-lg hover:bg-red-100 text-red-500"
-              title="Delete category"
-            >
+              title="Delete category">
               <Trash2 size={13} />
             </button>
           </div>
@@ -654,7 +663,7 @@
       </div>
     </div>
 
-    <!-- System Accounts -->
+    <!-- SK Officers -->
     <div class="card">
       <div class="flex items-center justify-between mb-1">
         <h2 class="font-semibold text-gray-800 flex items-center gap-2">
@@ -669,8 +678,8 @@
       <p class="text-xs text-gray-400 mb-4">SK officers who can access this admin dashboard.</p>
 
       <div class="space-y-2">
-        {#each users.filter(u => u.role !== 'applicant') as u}
-          <div class="flex items-center gap-3 p-2.5 rounded-xl bg-gray-50 group hover:bg-[#0A1F44]/5 transition">
+        {#each users.filter(u => u.role !== 'applicant') as u (u.id)}
+          <div class="flex items-center gap-3 p-2.5 rounded-xl bg-gray-50 hover:bg-[#0A1F44]/5 transition">
             <!-- Avatar -->
             <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
                  style="background:#0A1F44;">
@@ -687,7 +696,7 @@
                     <Mail size={10} /> {u.email}
                   </span>
                 {:else}
-                  <span class="text-red-500 text-[10px] font-medium"> No email set</span>
+                  <span class="text-red-500 text-[10px] font-medium">No email set</span>
                 {/if}
               </div>
             </div>
@@ -697,16 +706,18 @@
               {displayPosition(u)}
             </span>
 
-            <!-- Action buttons -->
+            <!-- Action buttons — always visible, no hover-only -->
             {#if u.role !== 'admin'}
-              <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+              <div class="flex gap-1 shrink-0">
                 <button onclick={() => openEditUser(u)}
-                  class="p-1.5 rounded-lg hover:bg-blue-100 text-blue-600 transition" title="Edit officer">
-                  <Pencil size={13} />
+                  class="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500 transition"
+                  title="Edit officer">
+                  <Pencil size={14} />
                 </button>
-                <button onclick={() => deleteUser(u)}
-                  class="p-1.5 rounded-lg hover:bg-red-100 text-red-500 transition" title="Delete officer">
-                  <Trash2 size={13} />
+                <button onclick={() => openDeleteConfirm(u)}
+                  class="p-1.5 rounded-lg hover:bg-red-100 text-red-500 transition"
+                  title="Delete officer">
+                  <Trash2 size={14} />
                 </button>
               </div>
             {/if}

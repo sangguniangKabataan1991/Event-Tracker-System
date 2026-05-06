@@ -51,6 +51,14 @@ export async function apiFetch(path, options = {}) {
     },
     body: options.body ? JSON.stringify(options.body) : undefined
   });
+
+  // Auto-logout kapag expired/invalid token
+  if (res.status === 401) {
+    logout();
+    window.location.href = '/login';
+    return;
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Network error' }));
     throw new Error(err.error || 'Request failed');

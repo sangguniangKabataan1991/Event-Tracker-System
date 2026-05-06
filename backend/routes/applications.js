@@ -37,7 +37,8 @@ const router = Router();
 router.get('/', authenticate, requireAdmin, async (req, res) => {
   try {
     const { status, search, from, to } = req.query;
-    let sql = `SELECT a.*, p.title as program_title
+    let sql = `SELECT a.*, p.title as program_title,
+                 (SELECT COUNT(*) FROM application_requirements ar WHERE ar.application_id = a.id) as file_count
                FROM applications a
                LEFT JOIN programs p ON a.program_id = p.id
                WHERE 1=1`;
@@ -60,7 +61,8 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
 router.get('/program/:programId', authenticate, requireAdmin, async (req, res) => {
   try {
     const { status, search, from, to } = req.query;
-    let sql = `SELECT a.*, u.username, p.title as program_title
+    let sql = `SELECT a.*, u.username, p.title as program_title,
+                 (SELECT COUNT(*) FROM application_requirements ar WHERE ar.application_id = a.id) as file_count
                FROM applications a
                LEFT JOIN users    u ON a.applicant_id = u.id
                LEFT JOIN programs p ON a.program_id   = p.id
@@ -84,7 +86,8 @@ router.get('/program/:programId', authenticate, requireAdmin, async (req, res) =
 router.get('/my', authenticate, async (req, res) => {
   try {
     const apps = await query(
-      `SELECT a.*, p.title as program_title, p.category as program_category
+      `SELECT a.*, p.title as program_title, p.category as program_category,
+         (SELECT COUNT(*) FROM application_requirements ar WHERE ar.application_id = a.id) as file_count
        FROM applications a
        LEFT JOIN programs p ON a.program_id = p.id
        WHERE a.applicant_id = ?
@@ -124,6 +127,7 @@ router.post('/', authenticate, async (req, res) => {
       [program_id, req.user.id, full_name, address, age, contact, barangay || null, requirements_submitted || null]
     );
 
+    // Return the new application ID so the frontend can upload files to it
     res.json({ id: result.insertId, message: 'Application submitted successfully' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -174,7 +178,6 @@ router.get('/:id/requirements', authenticate, async (req, res) => {
   try {
     const appId = req.params.id;
 
-    // Make sure application exists and user is allowed to view it
     const app = await queryOne('SELECT * FROM applications WHERE id = ?', [appId]);
     if (!app) return res.status(404).json({ error: 'Application not found' });
 

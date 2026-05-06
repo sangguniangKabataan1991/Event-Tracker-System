@@ -68,6 +68,7 @@
   let searchLoading = $state(false);
   let searchError   = $state('');
   let searchDone    = $state(false);
+  let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
   // ── Profile Modal ──
   let showProfile    = $state(false);
@@ -107,7 +108,6 @@
     showProfile = true;
     profileLoading = true;
     profileData = null;
-    // Open the native <dialog> for proper focus trapping
     dialogEl?.showModal();
     try {
       profileData = await apiFetch(`/beneficiaries/${b.id}/profile`);
@@ -145,13 +145,19 @@
     XLSX.writeFile(wb, `Beneficiaries_${programTitle.replace(/[^a-z0-9]/gi, '_')}.xlsx`);
   }
 
-  // ── Search / History ──────────────────────────────────────────────────
+  // ── Search / History — real-time with debounce ────────────────────────
   async function runSearch() {
-    if (!searchQuery.trim()) return;
-    searchLoading = true; searchError = ''; searchDone = false;
+    const q = searchQuery.trim();
+    if (!q) {
+      searchResults = [];
+      searchDone = false;
+      searchError = '';
+      return;
+    }
+    searchLoading = true;
+    searchError = '';
     try {
-      // Backend uses ?q= param (updated in beneficiaries.js)
-      searchResults = await apiFetch(`/beneficiaries/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      searchResults = await apiFetch(`/beneficiaries/search?q=${encodeURIComponent(q)}`);
       searchDone = true;
     } catch (e) {
       searchError = e instanceof Error ? e.message : 'Search failed';
@@ -160,7 +166,19 @@
     }
   }
 
-  function handleSearchKey(e: KeyboardEvent) { if (e.key === 'Enter') runSearch(); }
+  // Called on every keystroke — debounced 300 ms
+  function handleSearchInput() {
+    if (searchDebounce) clearTimeout(searchDebounce);
+    if (!searchQuery.trim()) {
+      searchResults = [];
+      searchDone = false;
+      searchError = '';
+      searchLoading = false;
+      return;
+    }
+    searchLoading = true; // show spinner immediately
+    searchDebounce = setTimeout(runSearch, 300);
+  }
 
   function statusBadgeClass(status: string) {
     if (status === 'approved') return 'bg-emerald-100 text-emerald-700';
@@ -215,15 +233,14 @@
   );
 </script>
 
-<!-- ── Profile Modal — uses native <dialog> for built-in focus trap + a11y ── -->
+<!-- ── Profile Modal ───────────────────────────────────────────────────────── -->
 <dialog
   bind:this={dialogEl}
   onkeydown={handleDialogKeydown}
-  class="p-0 rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] backdrop:bg-black/40 backdrop:backdrop-blur-sm open:flex open:flex-col"
+  class="p-0 rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] backdrop:bg-black/40 open:flex open:flex-col"
   style="border:none;"
 >
   {#if showProfile}
-    <!-- Modal Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
       <h2 class="font-bold text-gray-900 text-lg">Beneficiary Profile</h2>
       <button onclick={closeProfile} class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition">
@@ -238,7 +255,6 @@
           Loading profile...
         </div>
       {:else if profileData}
-        <!-- Avatar + Name -->
         <div class="flex items-center gap-4">
           <div class="w-14 h-14 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-xl font-bold shrink-0">
             {profileData.full_name.charAt(0)}
@@ -251,7 +267,6 @@
           </div>
         </div>
 
-        <!-- Contact Details -->
         <div class="grid grid-cols-1 gap-2.5">
           <div class="flex items-start gap-3 bg-gray-50 rounded-xl px-4 py-3">
             <MapPin size={15} class="mt-0.5 shrink-0 text-gray-400" />
@@ -287,7 +302,6 @@
           {/if}
         </div>
 
-        <!-- Benefit History -->
         <div>
           <h3 class="font-semibold text-gray-800 mb-3 flex items-center gap-2">
             <History size={15} class="text-gray-400" />
@@ -355,9 +369,9 @@
     </button>
   </div>
 
+  <!-- ══════════════════════════════ LIST TAB ══════════════════════════════ -->
   {#if activeTab === 'list'}
 
-    <!-- Manual Encode Form -->
     {#if showManualForm}
       <div class="card border-2 border-blue-200 bg-blue-50/30">
         <div class="mb-4 flex items-center justify-between">
@@ -443,11 +457,19 @@
         <label class="label flex items-center gap-1.5" for="fs">
           <Search size={13} class="text-gray-400" /> Search
         </label>
-        <input id="fs" bind:value={search} class="input" placeholder="Search by name..." />
+        <!-- Real-time filter: bind:value na directly reactive via $derived -->
+        <div class="relative">
+          <Search size={15} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            id="fs"
+            bind:value={search}
+            class="input pl-8"
+            placeholder="Search by name..."
+          />
+        </div>
       </div>
     </div>
 
-    <!-- List -->
     {#if loading}
       <div class="text-sm text-gray-400">Loading beneficiaries...</div>
     {:else}
@@ -455,129 +477,158 @@
         {filtered.length} beneficiar{filtered.length === 1 ? 'y' : 'ies'} total
       </div>
 
-      {#each Object.entries(grouped) as [programTitle, group]}
-        <div class="card">
-          <div class="mb-4 flex items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
-              <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0A1F44]/10 text-sm font-bold text-[#0A1F44]">
-                {group.items.length}
-              </div>
-              <div>
-                <h3 class="font-semibold text-gray-900">{programTitle}</h3>
-                <span class="text-xs text-gray-500">{group.category}</span>
-              </div>
-            </div>
-            <button
-              onclick={() => exportProgram(programTitle, group.items)}
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition"
-            >
-              <FileDown size={13} /> Export
-            </button>
-          </div>
-
-          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {#each group.items as b}
-              <button
-                type="button"
-                onclick={() => openProfile(b)}
-                class="flex items-start gap-3 rounded-xl bg-gray-50 p-3 text-left hover:bg-blue-50 hover:shadow-sm transition-all duration-150 group w-full"
-              >
-                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0A1F44] text-xs font-bold text-white mt-0.5">
-                  {b.full_name.charAt(0)}
-                </div>
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center justify-between gap-1">
-                    <div class="truncate text-sm font-semibold text-gray-900">{b.full_name}</div>
-                    <ChevronRight size={13} class="shrink-0 text-gray-300 group-hover:text-[#0A1F44] transition-colors" />
-                  </div>
-                  {#if b.address}
-                    <div class="flex items-center gap-1 mt-0.5">
-                      <MapPin size={10} class="shrink-0 text-gray-400" />
-                      <div class="truncate text-xs text-gray-400">{b.address}</div>
-                    </div>
-                  {/if}
-                  {#if b.contact}
-                    <div class="flex items-center gap-1 mt-0.5">
-                      <Phone size={10} class="shrink-0 text-gray-400" />
-                      <div class="truncate text-xs text-gray-400">{b.contact}</div>
-                    </div>
-                  {/if}
-                </div>
-              </button>
-            {/each}
-          </div>
-        </div>
-      {/each}
-
       {#if Object.keys(grouped).length === 0}
         <div class="card flex flex-col items-center gap-2 py-12 text-center text-gray-400">
           <Users size={32} class="text-gray-300" />
-          No beneficiaries found
+          {search ? `No results for "${search}"` : 'No beneficiaries found'}
         </div>
+      {:else}
+        {#each Object.entries(grouped) as [programTitle, group]}
+          <div class="card">
+            <div class="mb-4 flex items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0A1F44]/10 text-sm font-bold text-[#0A1F44]">
+                  {group.items.length}
+                </div>
+                <div>
+                  <h3 class="font-semibold text-gray-900">{programTitle}</h3>
+                  <span class="text-xs text-gray-500">{group.category}</span>
+                </div>
+              </div>
+              <button
+                onclick={() => exportProgram(programTitle, group.items)}
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition"
+              >
+                <FileDown size={13} /> Export
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {#each group.items as b}
+                <button
+                  type="button"
+                  onclick={() => openProfile(b)}
+                  class="flex items-start gap-3 rounded-xl bg-gray-50 p-3 text-left hover:bg-blue-50 hover:shadow-sm transition-all duration-150 group w-full"
+                >
+                  <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0A1F44] text-xs font-bold text-white mt-0.5">
+                    {b.full_name.charAt(0)}
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center justify-between gap-1">
+                      <div class="truncate text-sm font-semibold text-gray-900">{b.full_name}</div>
+                      <ChevronRight size={13} class="shrink-0 text-gray-300 group-hover:text-[#0A1F44] transition-colors" />
+                    </div>
+                    {#if b.address}
+                      <div class="flex items-center gap-1 mt-0.5">
+                        <MapPin size={10} class="shrink-0 text-gray-400" />
+                        <div class="truncate text-xs text-gray-400">{b.address}</div>
+                      </div>
+                    {/if}
+                    {#if b.contact}
+                      <div class="flex items-center gap-1 mt-0.5">
+                        <Phone size={10} class="shrink-0 text-gray-400" />
+                        <div class="truncate text-xs text-gray-400">{b.contact}</div>
+                      </div>
+                    {/if}
+                  </div>
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/each}
       {/if}
     {/if}
 
+  <!-- ══════════════════════════ SEARCH / HISTORY TAB ══════════════════════ -->
   {:else}
 
-    <!-- Search Tab -->
     <div class="card">
-      <p class="text-sm font-medium text-gray-700 mb-3">Search for a resident to view their complete benefit history</p>
-      <div class="flex gap-2">
-        <div class="relative flex-1">
-          <Search size={15} class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          <input bind:value={searchQuery} onkeydown={handleSearchKey} class="input pl-8 w-full" placeholder="e.g. Juan Dela Cruz" />
-        </div>
-        <button class="btn-primary px-5 flex items-center gap-2" onclick={runSearch} disabled={searchLoading || !searchQuery.trim()}>
-          <Search size={14} /> {searchLoading ? 'Searching...' : 'Search'}
-        </button>
+      <p class="text-sm font-medium text-gray-700 mb-3">
+        Search for a resident to view their complete benefit history
+      </p>
+      <!-- Real-time search input — oninput triggers debounced API call -->
+      <div class="relative">
+        {#if searchLoading}
+          <!-- Spinner while waiting -->
+          <div
+            class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-gray-200"
+            style="border-top-color: #0A1F44;"
+          ></div>
+        {:else}
+          <Search size={15} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        {/if}
+        <input
+          bind:value={searchQuery}
+          oninput={handleSearchInput}
+          class="input pl-9 w-full"
+          placeholder="Type a name to search…"
+          autocomplete="off"
+        />
+        {#if searchQuery}
+          <button
+            onclick={() => { searchQuery = ''; searchResults = []; searchDone = false; searchError = ''; }}
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 transition"
+          >
+            <X size={15} />
+          </button>
+        {/if}
       </div>
       {#if searchError}
         <p class="mt-2 text-sm text-red-600">{searchError}</p>
       {/if}
     </div>
 
-    {#if searchDone}
-      {#if searchResults.length === 0}
-        <div class="card text-center py-12 text-gray-400">
-          <Search size={32} class="mx-auto mb-2 text-gray-300" />
-          <p class="text-sm">No records found for "{searchQuery}"</p>
-        </div>
-      {:else}
-        {#each searchResults as result}
-          <div class="card">
-            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
-              <div class="w-10 h-10 rounded-full bg-[#0A1F44] flex items-center justify-center text-white font-bold text-sm shrink-0">
-                {result.full_name.charAt(0)}
-              </div>
-              <div>
-                <div class="font-semibold text-gray-900">{result.full_name}</div>
-                <div class="text-xs text-gray-400">{result.address}</div>
-              </div>
-              <span class="ml-auto text-xs font-medium px-2.5 py-1 rounded-full bg-[#0A1F44]/10 text-[#0A1F44]">
-                {result.records.length} record{result.records.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            <div class="space-y-2">
-              {#each result.records as rec}
-                <div class="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2.5 gap-3">
-                  <div class="min-w-0">
-                    <div class="text-sm font-medium truncate">{rec.program_title}</div>
-                    <div class="text-xs text-gray-400">{rec.category} · {fmtDate(rec.created_at)}</div>
-                  </div>
-                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 {statusBadgeClass(rec.status)}">
-                    {rec.status}
-                  </span>
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/each}
-      {/if}
-    {:else if !searchLoading && !searchDone}
+    <!-- Results -->
+    {#if !searchQuery.trim()}
+      <!-- Idle state -->
       <div class="card text-center py-12 text-gray-400">
         <History size={32} class="mx-auto mb-2 text-gray-300" />
-        <p class="text-sm">Enter a name above to see their benefit history</p>
+        <p class="text-sm">Type a name above to see their benefit history</p>
       </div>
+
+    {:else if searchLoading}
+      <!-- Loading skeleton -->
+      <div class="card py-10 flex flex-col items-center gap-3 text-gray-400">
+        <div class="h-5 w-5 animate-spin rounded-full border-2 border-gray-200" style="border-top-color:#0A1F44;"></div>
+        <p class="text-sm">Searching…</p>
+      </div>
+
+    {:else if searchDone && searchResults.length === 0}
+      <div class="card text-center py-12 text-gray-400">
+        <Search size={32} class="mx-auto mb-2 text-gray-300" />
+        <p class="text-sm">No records found for "<strong class="text-gray-600">{searchQuery}</strong>"</p>
+      </div>
+
+    {:else if searchDone}
+      {#each searchResults as result}
+        <div class="card">
+          <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
+            <div class="w-10 h-10 rounded-full bg-[#0A1F44] flex items-center justify-center text-white font-bold text-sm shrink-0">
+              {result.full_name.charAt(0)}
+            </div>
+            <div>
+              <div class="font-semibold text-gray-900">{result.full_name}</div>
+              <div class="text-xs text-gray-400">{result.address}</div>
+            </div>
+            <span class="ml-auto text-xs font-medium px-2.5 py-1 rounded-full bg-[#0A1F44]/10 text-[#0A1F44]">
+              {result.records.length} record{result.records.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <div class="space-y-2">
+            {#each result.records as rec}
+              <div class="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2.5 gap-3">
+                <div class="min-w-0">
+                  <div class="text-sm font-medium truncate">{rec.program_title}</div>
+                  <div class="text-xs text-gray-400">{rec.category} · {fmtDate(rec.created_at)}</div>
+                </div>
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 {statusBadgeClass(rec.status)}">
+                  {rec.status}
+                </span>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/each}
     {/if}
 
   {/if}
