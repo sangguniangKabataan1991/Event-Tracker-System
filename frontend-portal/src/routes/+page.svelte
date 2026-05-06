@@ -17,15 +17,26 @@
 	let loading = $state(true);
 	let error = $state('');
 
+	let appliedPrograms = $state([]);
+
 	onMount(async () => {
 		try {
 			programs = await apiFetch('/programs?status=open');
+
+			if ($user) {
+				const myApplications = await apiFetch('/applications/my');
+				appliedPrograms = myApplications.map((app) => app.program_id);
+			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Error';
 		} finally {
 			loading = false;
 		}
 	});
+
+	function hasApplied(programId) {
+		return appliedPrograms.includes(programId);
+	}
 </script>
 
 <div class="space-y-6">
@@ -81,7 +92,6 @@
 				></div>
 				Loading programs...
 			</div>
-
 		{:else if error}
 			<div
 				class="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
@@ -89,14 +99,12 @@
 				<CircleAlert class="h-4 w-4 shrink-0" />
 				{error}
 			</div>
-
 		{:else if programs.length === 0}
 			<div class="rounded-2xl border border-slate-200 bg-white py-16 text-center shadow-sm">
 				<Inbox class="mx-auto mb-3 h-10 w-10 text-slate-300" />
 				<p class="font-medium text-slate-500">No available programs at the moment.</p>
 				<p class="mt-1 text-sm text-slate-400">Please check back later!</p>
 			</div>
-
 		{:else}
 			<div class="grid gap-4">
 				{#each programs as program}
@@ -149,7 +157,15 @@
 
 							<div class="shrink-0">
 								{#if $user}
-									{#if program.slots_used >= program.slots}
+									{#if hasApplied(program.id)}
+										
+										<button
+											class="flex items-center gap-1.5 rounded-lg bg-slate-400 px-4 py-2 text-sm font-medium whitespace-nowrap text-white opacity-70 cursor-not-allowed"
+											disabled
+										>
+											Applied
+										</button>
+									{:else if program.slots_used >= program.slots}
 										<span
 											class="block rounded-lg bg-slate-100 px-3 py-2 text-center text-xs text-slate-400"
 										>
@@ -171,8 +187,10 @@
 										href="/login"
 										class="flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium whitespace-nowrap transition"
 										style="color: #0A1F44; border-color: rgba(10,31,68,0.25); background: rgba(10,31,68,0.05);"
-										onmouseenter={(e) => (e.currentTarget.style.background = 'rgba(10,31,68,0.10)')}
-										onmouseleave={(e) => (e.currentTarget.style.background = 'rgba(10,31,68,0.05)')}
+										onmouseenter={(e) =>
+											(e.currentTarget.style.background = 'rgba(10,31,68,0.10)')}
+										onmouseleave={(e) =>
+											(e.currentTarget.style.background = 'rgba(10,31,68,0.05)')}
 									>
 										<LogIn class="h-4 w-4" />
 										Login
