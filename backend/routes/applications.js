@@ -1,11 +1,22 @@
 import { Router } from 'express';
 import { query, queryOne, run } from '../db/database.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
+import multer from 'multer';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const uploadsDir = join(__dirname, '../uploads');
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename:    (req, file, cb) => cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${file.originalname.match(/\.[^.]+$/)?.[0] || ''}`)
+});
+const upload = multer({ storage });
 
 const router = Router();
 
-<<<<<<< HEAD
-// ── GET all applications (admin) ─────────────────────────────────────────────
+// ── GET all applications (admin) ──────────────────────────────────────────────
 router.get('/', authenticate, requireAdmin, async (req, res) => {
   try {
     const { status, search, from, to } = req.query;
@@ -16,20 +27,20 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
                WHERE 1=1`;
     const params = [];
 
-    if (status) { sql += ' AND a.status = ?';                         params.push(status); }
+    if (status) { sql += ' AND a.status = ?'; params.push(status); }
     if (search) {
       sql += ' AND (a.full_name LIKE ? OR a.address LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
-    if (from)   { sql += ' AND DATE(a.created_at) >= ?';              params.push(from); }
-    if (to)     { sql += ' AND DATE(a.created_at) <= ?';              params.push(to); }
+    if (from) { sql += ' AND DATE(a.created_at) >= ?'; params.push(from); }
+    if (to)   { sql += ' AND DATE(a.created_at) <= ?'; params.push(to); }
 
     sql += ' ORDER BY a.created_at DESC LIMIT 500';
     res.json(await query(sql, params));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── GET applications by program (admin) ──────────────────────────────────────
+// ── GET applications by program (admin) ───────────────────────────────────────
 router.get('/program/:programId', authenticate, requireAdmin, async (req, res) => {
   try {
     const { status, search, from, to } = req.query;
@@ -39,13 +50,6 @@ router.get('/program/:programId', authenticate, requireAdmin, async (req, res) =
                LEFT JOIN users    u ON a.applicant_id = u.id
                LEFT JOIN programs p ON a.program_id   = p.id
                WHERE a.program_id = ?`;
-=======
-router.get('/program/:programId', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { status, search } = req.query;
-    let sql = `SELECT a.*, u.username FROM applications a
-      LEFT JOIN users u ON a.applicant_id = u.id WHERE a.program_id = ?`;
->>>>>>> ae4f77d03b3ea0c1284ce9273f417c8f46a1cd72
     const params = [req.params.programId];
     if (status) { sql += ' AND a.status = ?'; params.push(status); }
     if (search) { sql += ' AND (a.full_name LIKE ? OR a.address LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
@@ -54,9 +58,9 @@ router.get('/program/:programId', authenticate, requireAdmin, async (req, res) =
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── GET my applications (applicant) ───────────────────────────────────────────
 router.get('/my', authenticate, async (req, res) => {
   try {
-<<<<<<< HEAD
     const apps = await query(
       `SELECT a.*, p.title as program_title, p.category as program_category,
          (SELECT COUNT(*) FROM application_requirements ar WHERE ar.application_id = a.id) as file_count
@@ -66,27 +70,11 @@ router.get('/my', authenticate, async (req, res) => {
        ORDER BY a.created_at DESC`,
       [req.user.id]
     );
-=======
-    const apps = await query(`SELECT a.*, p.title as program_title, p.category as program_category
-      FROM applications a LEFT JOIN programs p ON a.program_id = p.id
-      WHERE a.applicant_id = ? ORDER BY a.created_at DESC`, [req.user.id]);
->>>>>>> ae4f77d03b3ea0c1284ce9273f417c8f46a1cd72
     res.json(apps);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.get('/', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { status } = req.query;
-    let sql = `SELECT a.*, p.title as program_title FROM applications a
-      LEFT JOIN programs p ON a.program_id = p.id WHERE 1=1`;
-    const params = [];
-    if (status) { sql += ' AND a.status = ?'; params.push(status); }
-    sql += ' ORDER BY a.created_at DESC LIMIT 100';
-    res.json(await query(sql, params));
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
+// ── POST submit application ────────────────────────────────────────────────────
 router.post('/', authenticate, async (req, res) => {
   try {
     const { program_id, full_name, address, age, contact, barangay, requirements_submitted } = req.body;
@@ -107,15 +95,12 @@ router.post('/', authenticate, async (req, res) => {
       'INSERT INTO applications (program_id, applicant_id, full_name, address, age, contact, barangay, requirements_submitted) VALUES (?,?,?,?,?,?,?,?)',
       [program_id, req.user.id, full_name, address, age, contact, barangay || null, requirements_submitted || null]
     );
-<<<<<<< HEAD
 
-    // Return the new application ID so the frontend can upload files to it
-=======
->>>>>>> ae4f77d03b3ea0c1284ce9273f417c8f46a1cd72
     res.json({ id: result.insertId, message: 'Application submitted successfully' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── PATCH update application status ───────────────────────────────────────────
 router.patch('/:id/status', authenticate, requireAdmin, async (req, res) => {
   try {
     const { status, notes } = req.body;
@@ -145,20 +130,13 @@ router.patch('/:id/status', authenticate, requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-<<<<<<< HEAD
-// ════════════════════════════════════════════════════════════════════════════
-//  REQUIREMENTS
-// ════════════════════════════════════════════════════════════════════════════
-
-// ── GET requirements for an application ──────────────────────────────────────
+// ── GET requirements for an application ───────────────────────────────────────
 router.get('/:id/requirements', authenticate, async (req, res) => {
   try {
     const appId = req.params.id;
-
     const app = await queryOne('SELECT * FROM applications WHERE id = ?', [appId]);
     if (!app) return res.status(404).json({ error: 'Application not found' });
 
-    // Applicants can only view their own
     if (req.user.role === 'applicant' && app.applicant_id !== req.user.id)
       return res.status(403).json({ error: 'Forbidden' });
 
@@ -171,70 +149,52 @@ router.get('/:id/requirements', authenticate, async (req, res) => {
 });
 
 // ── POST upload requirement files ─────────────────────────────────────────────
-router.post(
-  '/:id/requirements',
-  authenticate,
-  upload.array('files', 10),
-  async (req, res) => {
-    try {
-      const appId = req.params.id;
+router.post('/:id/requirements', authenticate, upload.array('files', 10), async (req, res) => {
+  try {
+    const appId = req.params.id;
+    const app = await queryOne('SELECT * FROM applications WHERE id = ?', [appId]);
+    if (!app) return res.status(404).json({ error: 'Application not found' });
 
-      const app = await queryOne('SELECT * FROM applications WHERE id = ?', [appId]);
-      if (!app) return res.status(404).json({ error: 'Application not found' });
+    if (req.user.role !== 'admin' && req.user.role !== 'staff' && app.applicant_id !== req.user.id)
+      return res.status(403).json({ error: 'Forbidden' });
 
-      // Only the applicant owner, staff, or admin may upload
-      if (
-        req.user.role !== 'admin' &&
-        req.user.role !== 'staff' &&
-        app.applicant_id !== req.user.id
-      ) return res.status(403).json({ error: 'Forbidden' });
+    if (!req.files || req.files.length === 0)
+      return res.status(400).json({ error: 'No files uploaded' });
 
-      if (!req.files || req.files.length === 0)
-        return res.status(400).json({ error: 'No files uploaded' });
+    const labels = req.body.labels
+      ? Array.isArray(req.body.labels) ? req.body.labels : [req.body.labels]
+      : [];
 
-      // labels[] array sent alongside files (optional)
-      const labels = req.body.labels
-        ? Array.isArray(req.body.labels) ? req.body.labels : [req.body.labels]
-        : [];
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+    for (let i = 0; i < req.files.length; i++) {
+      const file    = req.files[i];
+      const fileUrl = `${baseUrl}/uploads/${file.filename}`;
+      await run(
+        `INSERT INTO application_requirements (application_id, file_name, file_url, file_type, requirement_label)
+         VALUES (?,?,?,?,?)`,
+        [appId, file.originalname, fileUrl, file.mimetype, labels[i] || null]
+      );
+    }
 
-      for (let i = 0; i < req.files.length; i++) {
-        const file    = req.files[i];
-        const fileUrl = `${baseUrl}/uploads/${file.filename}`;
-        await run(
-          `INSERT INTO application_requirements
-             (application_id, file_name, file_url, file_type, requirement_label)
-           VALUES (?,?,?,?,?)`,
-          [appId, file.originalname, fileUrl, file.mimetype, labels[i] || null]
-        );
-      }
+    res.json({ message: `${req.files.length} file(s) uploaded successfully` });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
-      res.json({ message: `${req.files.length} file(s) uploaded successfully` });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  }
-);
-
-// ── DELETE a single requirement file ─────────────────────────────────────────
+// ── DELETE a requirement file ──────────────────────────────────────────────────
 router.delete('/:id/requirements/:fileId', authenticate, async (req, res) => {
   try {
     const file = await queryOne(
-      `SELECT ar.*, a.applicant_id
-       FROM application_requirements ar
+      `SELECT ar.*, a.applicant_id FROM application_requirements ar
        JOIN applications a ON ar.application_id = a.id
        WHERE ar.id = ? AND ar.application_id = ?`,
       [req.params.fileId, req.params.id]
     );
     if (!file) return res.status(404).json({ error: 'File not found' });
 
-    // Only applicant owner, staff, or admin may delete
-    if (
-      req.user.role !== 'admin' &&
-      req.user.role !== 'staff' &&
-      file.applicant_id !== req.user.id
-    ) return res.status(403).json({ error: 'Forbidden' });
+    if (req.user.role !== 'admin' && req.user.role !== 'staff' && file.applicant_id !== req.user.id)
+      return res.status(403).json({ error: 'Forbidden' });
 
-    // Remove physical file from disk
     const filename = file.file_url.split('/uploads/')[1];
     if (filename) {
       const { unlink } = await import('fs/promises');
@@ -246,6 +206,4 @@ router.delete('/:id/requirements/:fileId', authenticate, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-=======
->>>>>>> ae4f77d03b3ea0c1284ce9273f417c8f46a1cd72
 export default router;
