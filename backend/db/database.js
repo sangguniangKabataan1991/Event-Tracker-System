@@ -31,7 +31,7 @@ export async function run(sql, params = []) {
 }
 
 export async function initDatabase() {
-  console.log('🔧 Initializing MySQL database...');
+  console.log('Initializing MySQL database...');
 
   // ── USERS ───────────────────────────────────────────────────────────────
   await pool.execute(`CREATE TABLE IF NOT EXISTS users (
@@ -52,12 +52,12 @@ export async function initDatabase() {
   const migrations = [
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS position VARCHAR(100) DEFAULT NULL AFTER role`,
     `ALTER TABLE users MODIFY COLUMN role ENUM('admin','staff','applicant') NOT NULL DEFAULT 'staff'`,
-    // Make email unique if it wasn't before (ignore error if index already exists)
+    // ── Beneficiaries: add barangay column if not yet existing ──────────────
+    `ALTER TABLE beneficiaries ADD COLUMN IF NOT EXISTS barangay VARCHAR(100) DEFAULT NULL`,
   ];
   for (const sql of migrations) {
     try { await pool.execute(sql); } catch (_) {}
   }
-  // Add unique index on email if not present
   try {
     await pool.execute(`ALTER TABLE users ADD UNIQUE INDEX idx_users_email (email)`);
   } catch (_) {}
@@ -120,6 +120,18 @@ export async function initDatabase() {
     FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
+  // ── APPLICATION REQUIREMENTS ──────────────────────────────────────────────
+  await pool.execute(`CREATE TABLE IF NOT EXISTS application_requirements (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    application_id INT NOT NULL,
+    file_name VARCHAR(500) NOT NULL,
+    file_url TEXT NOT NULL,
+    file_type VARCHAR(100) NOT NULL,
+    requirement_label VARCHAR(255) DEFAULT NULL,
+    uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
   // ── BENEFICIARIES ────────────────────────────────────────────────────────
   await pool.execute(`CREATE TABLE IF NOT EXISTS beneficiaries (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -128,6 +140,7 @@ export async function initDatabase() {
     full_name VARCHAR(200) NOT NULL,
     address TEXT NOT NULL,
     contact VARCHAR(50) NOT NULL,
+    barangay VARCHAR(100) DEFAULT NULL,
     benefit_received TEXT,
     received_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     notes TEXT,
@@ -154,7 +167,7 @@ export async function initDatabase() {
       'INSERT INTO users (username, password, full_name, role, position) VALUES (?, ?, ?, ?, ?)',
       ['admin', hash, 'SK Admin', 'admin', 'SK Chairperson']
     );
-    console.log(' Default admin created: admin / admin123');
+    console.log('Default admin created: admin / admin123');
   }
 
   // ── Default categories ────────────────────────────────────────────────────
@@ -166,7 +179,7 @@ export async function initDatabase() {
     await pool.execute('INSERT IGNORE INTO program_categories (name) VALUES (?)', [name]);
   }
 
-  console.log(' Database initialized successfully!');
+  console.log('Database initialized successfully!');
 }
 
 export default pool;

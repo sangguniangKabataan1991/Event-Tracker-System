@@ -13,7 +13,7 @@ router.get('/', async (req, res) => {
       (SELECT COUNT(*) FROM applications WHERE program_id = p.id) as total_applications
       FROM programs p LEFT JOIN users u ON p.created_by = u.id WHERE 1=1`;
     const params = [];
-    if (status) { sql += ' AND p.status = ?'; params.push(status); }
+    if (status)   { sql += ' AND p.status = ?';   params.push(status); }
     if (category) { sql += ' AND p.category = ?'; params.push(category); }
     sql += ' ORDER BY p.created_at DESC';
     res.json(await query(sql, params));
@@ -22,8 +22,11 @@ router.get('/', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
   try {
-    const p = await queryOne(`SELECT p.*, u.full_name as created_by_name FROM programs p
-      LEFT JOIN users u ON p.created_by = u.id WHERE p.id = ?`, [req.params.id]);
+    const p = await queryOne(
+      `SELECT p.*, u.full_name as created_by_name FROM programs p
+       LEFT JOIN users u ON p.created_by = u.id WHERE p.id = ?`,
+      [req.params.id]
+    );
     if (!p) return res.status(404).json({ error: 'Program not found' });
     res.json(p);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -54,10 +57,35 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
 router.patch('/:id/status', authenticate, requireAdmin, async (req, res) => {
   try {
     const { status } = req.body;
-    if (!['draft','open','closed','completed'].includes(status))
+    if (!['draft', 'open', 'closed', 'completed'].includes(status))
       return res.status(400).json({ error: 'Invalid status' });
     await run('UPDATE programs SET status=? WHERE id=?', [status, req.params.id]);
     res.json({ message: `Program ${status}` });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST duplicate a program ──────────────────────────────────────────────────
+router.post('/:id/duplicate', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const original = await queryOne('SELECT * FROM programs WHERE id = ?', [req.params.id]);
+    if (!original) return res.status(404).json({ error: 'Program not found' });
+
+    const result = await run(
+      `INSERT INTO programs
+         (title, description, category, slots, slots_used, requirements, start_date, end_date, status, created_by)
+       VALUES (?,?,?,?,0,?,?,?,'draft',?)`,
+      [
+        original.title,
+        original.description,
+        original.category,
+        original.slots,
+        original.requirements,
+        original.start_date,
+        original.end_date,
+        req.user.id,
+      ]
+    );
+    res.json({ id: result.insertId, message: 'Program duplicated as draft' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

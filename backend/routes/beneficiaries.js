@@ -1,18 +1,22 @@
+// routes/beneficiaries.js
 import { Router } from 'express';
 import { query, queryOne, run } from '../db/database.js';
-import { authenticate, requireAdmin } from '../middleware/auth.js';
+import { authenticate, requireAdmin, requireStaff } from '../middleware/auth.js';
 
 const router = Router();
 
-// ── GET ALL BENEFICIARIES ──────────────────────────────────────────────────
-router.get('/', authenticate, requireAdmin, async (req, res) => {
+// ── GET ALL BENEFICIARIES (staff + admin) ──────────────────────────────────
+router.get('/', authenticate, requireStaff, async (req, res) => {
   try {
     const { program_id, search } = req.query;
 
     let sql = `
-      SELECT b.*, p.title AS program_title, p.category
+      SELECT b.*, p.title AS program_title, p.category,
+             COALESCE(b.barangay, a.barangay) AS barangay,
+             a.age AS age
       FROM beneficiaries b
       LEFT JOIN programs p ON b.program_id = p.id
+      LEFT JOIN applications a ON b.application_id = a.id
       WHERE 1=1
     `;
     const params = [];
@@ -34,32 +38,52 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// ── SEARCH PERSON BENEFIT HISTORY ─────────────────────────────────────────
-router.get('/search', authenticate, requireAdmin, async (req, res) => {
+// ── SEARCH PERSON BENEFIT HISTORY (staff + admin) ─────────────────────────
+router.get('/search', authenticate, requireStaff, async (req, res) => {
   try {
-    const { name } = req.query;
-    if (!name) return res.status(400).json({ error: 'Search name is required' });
+    const { q } = req.query;
+    if (!q) return res.status(400).json({ error: 'Search query is required' });
 
-    const results = await query(`
+    const rows = await query(`
       SELECT
-        b.full_name, b.address, b.contact, b.received_at,
-        p.title AS program_title, p.category, p.start_date, p.end_date,
-        a.age, a.barangay, a.status AS application_status
+        b.full_name, b.address, b.contact,
+        p.title AS program_title, p.category,
+        COALESCE(a.status, 'approved') AS status,
+        b.received_at AS created_at
       FROM beneficiaries b
       LEFT JOIN programs p ON b.program_id = p.id
       LEFT JOIN applications a ON b.application_id = a.id
       WHERE b.full_name LIKE ?
-      ORDER BY b.received_at DESC
-    `, [`%${name}%`]);
+      ORDER BY b.full_name, b.received_at DESC
+    `, [`%${q}%`]);
 
-    res.json(results);
+    const map = new Map();
+    for (const row of rows) {
+      const key = `${row.full_name}||${row.address}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          full_name: row.full_name,
+          address:   row.address,
+          contact:   row.contact,
+          records:   [],
+        });
+      }
+      map.get(key).records.push({
+        program_title: row.program_title,
+        category:      row.category,
+        status:        row.status,
+        created_at:    row.created_at,
+      });
+    }
+
+    res.json(Array.from(map.values()));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// ── REPORTS SUMMARY ───────────────────────────────────────────────────────
-router.get('/reports/summary', authenticate, requireAdmin, async (req, res) => {
+// ── REPORTS SUMMARY (staff + admin) ───────────────────────────────────────
+router.get('/reports/summary', authenticate, requireStaff, async (req, res) => {
   try {
     const [
       totalPrograms,
@@ -102,11 +126,11 @@ router.get('/reports/summary', authenticate, requireAdmin, async (req, res) => {
 
     res.json({
       summary: {
-        totalPrograms: totalPrograms.count,
-        activePrograms: activePrograms.count,
-        pendingApps: pendingApps.count,
+        totalPrograms:         totalPrograms.count,
+        activePrograms:        activePrograms.count,
+        pendingApps:           pendingApps.count,
         approvedBeneficiaries: approvedBeneficiaries.count,
-        rejectedApps: rejectedApps.count,
+        rejectedApps:          rejectedApps.count,
       },
       perProgram,
       mostAssisted,
@@ -117,17 +141,17 @@ router.get('/reports/summary', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// ── MONTHLY / YEARLY SUMMARY ───────────────────────────────────────────────
-router.get('/reports/monthly', authenticate, requireAdmin, async (req, res) => {
+// ── MONTHLY / YEARLY SUMMARY (staff + admin) ──────────────────────────────
+router.get('/reports/monthly', authenticate, requireStaff, async (req, res) => {
   try {
     const { year } = req.query;
     const targetYear = year || new Date().getFullYear();
 
     const monthly = await query(`
       SELECT
-        MONTH(b.received_at) AS month,
-        MONTHNAME(b.received_at) AS month_name,
-        COUNT(*) AS beneficiary_count,
+        MONTH(b.received_at)         AS month,
+        MONTHNAME(b.received_at)     AS month_name,
+        COUNT(*)                     AS beneficiary_count,
         COUNT(DISTINCT b.program_id) AS programs_active
       FROM beneficiaries b
       WHERE YEAR(b.received_at) = ?
@@ -137,8 +161,8 @@ router.get('/reports/monthly', authenticate, requireAdmin, async (req, res) => {
 
     const yearly = await query(`
       SELECT
-        YEAR(b.received_at) AS year,
-        COUNT(*) AS beneficiary_count,
+        YEAR(b.received_at)          AS year,
+        COUNT(*)                     AS beneficiary_count,
         COUNT(DISTINCT b.program_id) AS programs_count
       FROM beneficiaries b
       GROUP BY YEAR(b.received_at)
@@ -151,8 +175,50 @@ router.get('/reports/monthly', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// ── MANUAL ENCODE ─────────────────────────────────────────────────────────
-router.post('/manual', authenticate, requireAdmin, async (req, res) => {
+// ── GET BENEFICIARY PROFILE WITH HISTORY (staff + admin) ──────────────────
+router.get('/:id/profile', authenticate, requireStaff, async (req, res) => {
+  try {
+    const beneficiary = await queryOne(`
+      SELECT b.*, p.title AS program_title, p.category,
+             COALESCE(b.barangay, a.barangay) AS barangay,
+             a.age AS age
+      FROM beneficiaries b
+      LEFT JOIN programs p ON b.program_id = p.id
+      LEFT JOIN applications a ON b.application_id = a.id
+      WHERE b.id = ?
+    `, [req.params.id]);
+
+    if (!beneficiary) return res.status(404).json({ error: 'Beneficiary not found' });
+
+    const records = await query(`
+      SELECT
+        p.title    AS program_title,
+        p.category,
+        COALESCE(a.status, 'approved') AS status,
+        b.received_at AS created_at
+      FROM beneficiaries b
+      LEFT JOIN programs p ON b.program_id = p.id
+      LEFT JOIN applications a ON b.application_id = a.id
+      WHERE b.full_name = ? AND b.address = ?
+      ORDER BY b.received_at DESC
+    `, [beneficiary.full_name, beneficiary.address]);
+
+    res.json({
+      full_name: beneficiary.full_name,
+      address:   beneficiary.address,
+      contact:   beneficiary.contact,
+      age:       beneficiary.age    || null,
+      barangay:  beneficiary.barangay || null,
+      notes:     beneficiary.notes    || null,
+      records,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── MANUAL ENCODE (staff + admin) ─────────────────────────────────────────
+router.post('/manual', authenticate, requireStaff, async (req, res) => {
   try {
     const { program_id, full_name, address, age, contact, barangay, notes } = req.body;
 
@@ -204,8 +270,8 @@ router.post('/manual', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-// ── BULK / EXCEL IMPORT ───────────────────────────────────────────────────
-router.post('/bulk-import', authenticate, requireAdmin, async (req, res) => {
+// ── BULK / EXCEL IMPORT (staff + admin) ───────────────────────────────────
+router.post('/bulk-import', authenticate, requireStaff, async (req, res) => {
   try {
     const { program_id, beneficiaries: list } = req.body;
 
@@ -219,25 +285,18 @@ router.post('/bulk-import', authenticate, requireAdmin, async (req, res) => {
     let success = 0;
     let skipped = 0;
     const skippedNames = [];
-    const warnings = [];
+    const warnings     = [];
 
     for (const person of list) {
       const { full_name, address, age, contact, barangay } = person;
 
-      if (!full_name || !address || !contact) {
-        skipped++;
-        continue;
-      }
+      if (!full_name || !address || !contact) { skipped++; continue; }
 
       const duplicate = await queryOne(
         'SELECT id FROM beneficiaries WHERE program_id = ? AND full_name = ?',
         [program_id, full_name]
       );
-      if (duplicate) {
-        skipped++;
-        skippedNames.push(full_name);
-        continue;
-      }
+      if (duplicate) { skipped++; skippedNames.push(full_name); continue; }
 
       const history = await query(`
         SELECT p.title AS program_title
@@ -266,17 +325,14 @@ router.post('/bulk-import', authenticate, requireAdmin, async (req, res) => {
 
     res.json({
       message: `Successfully imported ${success} beneficiar${success === 1 ? 'y' : 'ies'}.`,
-      success,
-      skipped,
-      skippedNames,
-      warnings,
+      success, skipped, skippedNames, warnings,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// ── DELETE BENEFICIARY ────────────────────────────────────────────────────
+// ── DELETE BENEFICIARY (admin only) ──────────────────────────────────────
 router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     await run('DELETE FROM beneficiaries WHERE id = ?', [req.params.id]);

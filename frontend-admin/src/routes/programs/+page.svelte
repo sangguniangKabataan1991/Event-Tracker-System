@@ -1,20 +1,25 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/stores';
   import { apiFetch } from '$lib/api.js';
-  import Plus from 'lucide-svelte/icons/plus';
-  import Pencil from 'lucide-svelte/icons/pencil';
-  import Trash2 from 'lucide-svelte/icons/trash-2';
-  import Users from 'lucide-svelte/icons/users';
-  import X from 'lucide-svelte/icons/x';
-  import CalendarDays from 'lucide-svelte/icons/calendar-days';
-  import Tag from 'lucide-svelte/icons/tag';
-  import ListChecks from 'lucide-svelte/icons/list-checks';
-  import AlignLeft from 'lucide-svelte/icons/align-left';
-  import Hash from 'lucide-svelte/icons/hash';
-  import ToggleLeft from 'lucide-svelte/icons/toggle-left';
-  import ToggleRight from 'lucide-svelte/icons/toggle-right';
+  import Plus          from 'lucide-svelte/icons/plus';
+  import Pencil        from 'lucide-svelte/icons/pencil';
+  import Trash2        from 'lucide-svelte/icons/trash-2';
+  import Users         from 'lucide-svelte/icons/users';
+  import X             from 'lucide-svelte/icons/x';
+  import CalendarDays  from 'lucide-svelte/icons/calendar-days';
+  import Tag           from 'lucide-svelte/icons/tag';
+  import ListChecks    from 'lucide-svelte/icons/list-checks';
+  import AlignLeft     from 'lucide-svelte/icons/align-left';
+  import Hash          from 'lucide-svelte/icons/hash';
   import ClipboardList from 'lucide-svelte/icons/clipboard-list';
-  import FolderOpen from 'lucide-svelte/icons/folder-open';
+  import FolderOpen    from 'lucide-svelte/icons/folder-open';
+  import AlertTriangle from 'lucide-svelte/icons/alert-triangle';
+  import Search        from 'lucide-svelte/icons/search';
+  import Copy          from 'lucide-svelte/icons/copy';
+  import Clock         from 'lucide-svelte/icons/clock';
+  import SlidersHorizontal from 'lucide-svelte/icons/sliders-horizontal';
+  import ArrowUpDown   from 'lucide-svelte/icons/arrow-up-down';
 
   type ProgramStatus = 'open' | 'closed' | 'draft' | 'completed';
 
@@ -43,14 +48,22 @@
     end_date: string;
   }
 
-  let programs = $state<Program[]>([]);
-  let categories = $state<Category[]>([]);
-  let loading = $state(true);
-  let showForm = $state(false);
-  let editMode = $state(false);
+  let programs        = $state<Program[]>([]);
+  let categories      = $state<Category[]>([]);
+  let loading         = $state(true);
+  let showForm        = $state(false);
+  let editMode        = $state(false);
   let selectedProgram = $state<Program | null>(null);
-  let error = $state('');
-  let success = $state('');
+  let error           = $state('');
+  let success         = $state('');
+  let searchTerm      = $state('');
+  let statusFilter    = $state($page.url.searchParams.get('status') ?? '');
+  let categoryFilter  = $state('');
+  let sortBy          = $state<'newest' | 'oldest' | 'title'>('newest');
+
+  let showDeleteConfirm = $state(false);
+  let programToDelete   = $state<Program | null>(null);
+
   let form = $state<FormData>({
     title: '', description: '', category: '', slots: '',
     requirements: '', start_date: '', end_date: '',
@@ -82,16 +95,27 @@
   }
 
   function openEdit(p: Program) {
-    form = { ...p, slots: String(p.slots) };
-    editMode = true;
+    form = {
+      title:        p.title,
+      description:  p.description,
+      category:     p.category,
+      slots:        String(p.slots),
+      requirements: p.requirements,
+      start_date:   p.start_date ? p.start_date.slice(0, 10) : '',
+      end_date:     p.end_date   ? p.end_date.slice(0, 10)   : '',
+    };
+    editMode        = true;
     selectedProgram = p;
-    showForm = true;
+    showForm        = true;
   }
 
   async function submitForm() {
     try {
       if (editMode && selectedProgram != null) {
-        await apiFetch(`/programs/${selectedProgram.id}`, { method: 'PUT', body: form });
+        await apiFetch(`/programs/${selectedProgram.id}`, {
+          method: 'PUT',
+          body: { ...form, status: selectedProgram.status },
+        });
         success = 'Program updated successfully.';
       } else {
         await apiFetch('/programs', { method: 'POST', body: form });
@@ -117,10 +141,13 @@
   async function deleteProgram(id: string | number) {
     if (!confirm('Are you sure you want to delete this program? This cannot be undone.')) return;
     try {
-      await apiFetch(`/programs/${id}`, { method: 'DELETE' });
+      await apiFetch(`/programs/${programToDelete.id}`, { method: 'DELETE' });
+      showDeleteConfirm = false;
+      programToDelete   = null;
       await loadData();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to delete program';
+      showDeleteConfirm = false;
     }
   }
 
@@ -156,14 +183,29 @@
       <h1 class="text-2xl font-bold text-gray-900">Programs</h1>
       <p class="text-gray-500 text-sm">Manage SK assistance programs</p>
     </div>
-    <button
-      onclick={openCreate}
-      class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition hover:opacity-90 active:scale-[0.98]"
-      style="background: #0A1F44;"
-    >
-      <Plus size={15} /> New Program
-    </button>
   </div>
+{/if}
+
+<!-- ── CREATE / EDIT MODAL ────────────────────────────────────────────────────── -->
+{#if showForm}
+  <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" style="background: rgba(10,31,68,0.5);">
+    <div class="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-y-auto" style="max-height: 92dvh;">
+
+      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
+        <div class="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-1 bg-slate-200 rounded-full sm:hidden"></div>
+        <div class="mt-2 sm:mt-0">
+          <h2 class="text-base font-bold text-slate-900">
+            {editMode ? 'Edit Program' : 'New Program'}
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">
+            {editMode ? 'Update the program details below' : 'Fill in the details to create a new program'}
+          </p>
+        </div>
+        <button onclick={() => showForm = false}
+          class="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition">
+          <X size={16} />
+        </button>
+      </div>
 
   {#if error}
     <div class="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm">{error}</div>
@@ -263,31 +305,21 @@
           </div>
 
           <div class="space-y-1.5">
-            <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 uppercase tracking-wide" for="desc">
-              <AlignLeft size={11} /> Description
+            <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 uppercase tracking-wide" for="start">
+              <CalendarDays size={11} /> Start Date
             </label>
-            <textarea
-              id="desc"
-              bind:value={form.description}
-              placeholder="Program details and objectives..."
-              rows="3"
-              class="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition bg-slate-50 resize-none"
-            ></textarea>
+            <input id="start" bind:value={form.start_date} type="date"
+              class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition bg-slate-50" />
           </div>
 
           <div class="space-y-1.5">
-            <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 uppercase tracking-wide" for="req">
-              <ListChecks size={11} /> Requirements <span class="text-red-400">*</span>
+            <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 uppercase tracking-wide" for="end">
+              <CalendarDays size={11} /> End Date
             </label>
-            <textarea
-              id="req"
-              bind:value={form.requirements}
-              required
-              placeholder="List of requirements for applicants..."
-              rows="3"
-              class="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition bg-slate-50 resize-none"
-            ></textarea>
+            <input id="end" bind:value={form.end_date} type="date"
+              class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition bg-slate-50" />
           </div>
+        </div>
 
           <div class="grid grid-cols-2 gap-3">
             <div class="space-y-1.5">
@@ -331,9 +363,92 @@
             </button>
           </div>
 
-        </form>
-      </div>
+<!-- ── MAIN CONTENT ────────────────────────────────────────────────────────────── -->
+<div class="p-4 sm:p-6 space-y-4 sm:space-y-5">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between gap-2 flex-wrap">
+    <div>
+      <h1 class="text-xl sm:text-2xl font-bold text-gray-900">Programs</h1>
+      <p class="text-gray-500 text-xs sm:text-sm">Manage SK assistance programs</p>
     </div>
+    <div class="flex items-center gap-2">
+      <!-- Search -->
+      <div class="relative">
+        <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        <input bind:value={searchTerm} placeholder="Search programs..."
+          class="pl-8 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder:text-slate-300 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition w-44 sm:w-56" />
+        {#if searchTerm}
+          <button onclick={() => searchTerm = ''}
+            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition">
+            <X size={13} />
+          </button>
+        {/if}
+      </div>
+      <!-- New Program -->
+      <button onclick={openCreate}
+        class="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white transition hover:opacity-90 active:scale-[0.98] shrink-0"
+        style="background: #0A1F44;">
+        <Plus size={14} />
+        <span class="hidden xs:inline">New Program</span>
+        <span class="xs:hidden">New</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Filter + Sort bar -->
+  <div class="flex flex-wrap gap-2 items-center">
+    <!-- Status filter -->
+    <div class="flex items-center gap-1.5">
+      <SlidersHorizontal size={13} class="text-slate-400 shrink-0" />
+      <select bind:value={statusFilter}
+        class="border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 bg-slate-50 outline-none focus:border-blue-400 transition">
+        <option value="">All Statuses</option>
+        <option value="open">Open</option>
+        <option value="closed">Closed</option>
+        <option value="draft">Draft</option>
+        <option value="completed">Completed</option>
+      </select>
+    </div>
+
+    <!-- Category filter -->
+    <select bind:value={categoryFilter}
+      class="border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 bg-slate-50 outline-none focus:border-blue-400 transition">
+      <option value="">All Categories</option>
+      {#each uniqueCategories as cat}
+        <option value={cat}>{cat}</option>
+      {/each}
+    </select>
+
+    <!-- Sort -->
+    <div class="flex items-center gap-1.5">
+      <ArrowUpDown size={13} class="text-slate-400 shrink-0" />
+      <select bind:value={sortBy}
+        class="border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 bg-slate-50 outline-none focus:border-blue-400 transition">
+        <option value="newest">Newest First</option>
+        <option value="oldest">Oldest First</option>
+        <option value="title">A–Z by Title</option>
+      </select>
+    </div>
+
+    {#if statusFilter || categoryFilter}
+      <button onclick={() => { statusFilter = ''; categoryFilter = ''; }}
+        class="text-xs text-red-400 hover:text-red-600 transition px-1">
+        Clear filters ×
+      </button>
+    {/if}
+
+    <span class="text-xs text-slate-400 ml-auto">
+      {filteredPrograms.length} of {programs.length} program{programs.length !== 1 ? 's' : ''}
+    </span>
+  </div>
+
+  <!-- Alerts -->
+  {#if error}
+    <div class="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm">{error}</div>
+  {/if}
+  {#if success}
+    <div class="bg-emerald-50 border border-emerald-200 text-emerald-700 p-3 rounded-xl text-sm">{success}</div>
   {/if}
 
 {#if loading}
@@ -372,6 +487,11 @@
               <span class="text-slate-400">Pending: <strong class="text-amber-600">{p.pending_count}</strong></span>
               <span class="text-slate-400">Approved: <strong class="text-emerald-600">{p.approved_count}</strong></span>
             </div>
+            <div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+              <span class="text-[11px] font-medium px-2 py-0.5 rounded-full {cfg.classes}">{cfg.label}</span>
+              <span class="text-[11px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200 hidden sm:inline">{p.category}</span>
+            </div>
+          </div>
 
           </div>
 

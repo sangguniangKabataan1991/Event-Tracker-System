@@ -13,8 +13,17 @@ export function authenticate(req, res, next) {
   }
 }
 
+/** Admin only — for destructive/sensitive actions */
 export function requireAdmin(req, res, next) {
-  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  if (req.user?.role !== 'admin')
+    return res.status(403).json({ error: 'Admin only' });
+  next();
+}
+
+/** Staff OR admin — for day-to-day operations */
+export function requireStaff(req, res, next) {
+  if (req.user?.role !== 'admin' && req.user?.role !== 'staff')
+    return res.status(403).json({ error: 'Staff or admin access required' });
   next();
 }
 
