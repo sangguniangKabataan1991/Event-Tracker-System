@@ -2,7 +2,7 @@
   import '../app.css';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { user, logout } from '$lib/api.js';
+  import { user, logout, openProfileEdit } from '$lib/api.js';
   import { onMount } from 'svelte';
   import type { Snippet } from 'svelte';
   import LayoutDashboard from 'lucide-svelte/icons/layout-dashboard';
@@ -17,10 +17,11 @@
   import Menu            from 'lucide-svelte/icons/menu';
   import X               from 'lucide-svelte/icons/x';
   import ShieldAlert     from 'lucide-svelte/icons/shield-alert';
+  import Pencil          from 'lucide-svelte/icons/pencil';
 
   let { children }: { children: Snippet } = $props();
-  let collapsed    = $state(false);
-  let mobileOpen   = $state(false);
+  let collapsed  = $state(false);
+  let mobileOpen = $state(false);
 
   const STAFF_ROUTES = ['/', '/programs', '/applications', '/beneficiaries', '/search', '/reports'];
 
@@ -48,6 +49,13 @@
 
   function handleLogout() { logout(); goto('/login'); }
   function closeMobile()  { mobileOpen = false; }
+
+  // Clicking the profile card → go to /settings and trigger the profile modal
+  function handleProfileClick() {
+    closeMobile();
+    openProfileEdit.set(true);
+    if (($page.url.pathname as string) !== '/settings') goto('/settings');
+  }
 
   let currentRole     = $derived(($user as any)?.role     ?? '');
   let currentPosition = $derived(($user as any)?.position ?? '');
@@ -167,45 +175,113 @@
         {/each}
       </nav>
 
-      <!-- User info -->
+      <!-- ── Account section ───────────────────────────────────────────────── -->
       <div class="px-3 pb-4 border-t border-white/10 pt-3 space-y-2">
+
         {#if !collapsed}
           <div class="px-2 pb-1">
             <span class="text-[10px] font-semibold text-white/40 uppercase tracking-widest">Account</span>
           </div>
         {/if}
 
+        <!-- ── Expanded sidebar ── -->
         {#if !collapsed}
-          <div class="px-3 py-2 rounded-xl space-y-1" style="background:rgba(255,255,255,0.08);">
-            <div class="flex items-center justify-between gap-1">
-              <div class="text-[10px] text-white/40 shrink-0">Logged in as</div>
-              <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full truncate max-w-30 text-right {roleBadgeColor}">
-                {positionLabel}
-              </span>
+          {#if currentRole === 'admin'}
+            <!-- Admin: clickable profile card -->
+            <button
+              onclick={handleProfileClick}
+              class="w-full text-left px-3 py-2 rounded-xl space-y-1 transition-all duration-150
+                     hover:bg-white/10 group cursor-pointer"
+              style="background:rgba(255,255,255,0.08);"
+              title="Edit your profile"
+            >
+              <div class="flex items-center justify-between gap-1">
+                <div class="text-[10px] text-white/40 shrink-0">Logged in as</div>
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full truncate max-w-30 text-right {roleBadgeColor}">
+                  {positionLabel}
+                </span>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <div class="text-xs font-semibold text-white truncate">{($user as any).full_name}</div>
+                  <div class="text-[10px] text-white/30 truncate">@{($user as any).username}</div>
+                </div>
+                <Pencil size={12} class="shrink-0 text-white/20 group-hover:text-white/60 transition" />
+              </div>
+            </button>
+          {:else}
+            <!-- Staff/other officers: non-clickable -->
+            <div class="px-3 py-2 rounded-xl space-y-1" style="background:rgba(255,255,255,0.08);">
+              <div class="flex items-center justify-between gap-1">
+                <div class="text-[10px] text-white/40 shrink-0">Logged in as</div>
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full truncate max-w-30 text-right {roleBadgeColor}">
+                  {positionLabel}
+                </span>
+              </div>
+              <div class="text-xs font-semibold text-white truncate">{($user as any).full_name}</div>
+              <div class="text-[10px] text-white/30">@{($user as any).username}</div>
             </div>
-            <div class="text-xs font-semibold text-white truncate">{($user as any).full_name}</div>
-            <div class="text-[10px] text-white/30">@{($user as any).username}</div>
-          </div>
+          {/if}
+
+        <!-- ── Collapsed sidebar (desktop) ── -->
         {:else}
+          <!-- Desktop: show avatar only -->
           <div class="justify-center py-1 hidden lg:flex">
-            <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                 style="background:rgba(255,255,255,0.15);">
-              {(($user as any).full_name ?? 'A').charAt(0)}
-            </div>
+            {#if currentRole === 'admin'}
+              <button
+                onclick={handleProfileClick}
+                title="Edit your profile"
+                class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold
+                       hover:ring-2 hover:ring-white/40 transition"
+                style="background:rgba(255,255,255,0.15);"
+              >
+                {(($user as any).full_name ?? 'A').charAt(0)}
+              </button>
+            {:else}
+              <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                   style="background:rgba(255,255,255,0.15);">
+                {(($user as any).full_name ?? 'A').charAt(0)}
+              </div>
+            {/if}
           </div>
-          <!-- Mobile always shows full user info -->
-          <div class="px-3 py-2 rounded-xl space-y-1 lg:hidden" style="background:rgba(255,255,255,0.08);">
-            <div class="flex items-center justify-between gap-1">
-              <div class="text-[10px] text-white/40 shrink-0">Logged in as</div>
-              <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full truncate max-w-30 text-right {roleBadgeColor}">
-                {positionLabel}
-              </span>
+
+          <!-- Mobile (collapsed state doesn't apply on mobile, but keep full card) -->
+          {#if currentRole === 'admin'}
+            <button
+              onclick={handleProfileClick}
+              class="w-full text-left px-3 py-2 rounded-xl space-y-1 transition-all duration-150
+                     hover:bg-white/10 group cursor-pointer lg:hidden"
+              style="background:rgba(255,255,255,0.08);"
+            >
+              <div class="flex items-center justify-between gap-1">
+                <div class="text-[10px] text-white/40 shrink-0">Logged in as</div>
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full truncate max-w-30 text-right {roleBadgeColor}">
+                  {positionLabel}
+                </span>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <div class="text-xs font-semibold text-white truncate">{($user as any).full_name}</div>
+                  <div class="text-[10px] text-white/30 truncate">@{($user as any).username}</div>
+                </div>
+                <Pencil size={12} class="shrink-0 text-white/20 group-hover:text-white/60 transition" />
+              </div>
+            </button>
+          {:else}
+            <div class="px-3 py-2 rounded-xl space-y-1 lg:hidden" style="background:rgba(255,255,255,0.08);">
+              <div class="flex items-center justify-between gap-1">
+                <div class="text-[10px] text-white/40 shrink-0">Logged in as</div>
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full truncate max-w-30 text-right {roleBadgeColor}">
+                  {positionLabel}
+                </span>
+              </div>
+              <div class="text-xs font-semibold text-white truncate">{($user as any).full_name}</div>
+              <div class="text-[10px] text-white/30">@{($user as any).username}</div>
             </div>
-            <div class="text-xs font-semibold text-white truncate">{($user as any).full_name}</div>
-            <div class="text-[10px] text-white/30">@{($user as any).username}</div>
-          </div>
+          {/if}
         {/if}
 
+        <!-- Staff restriction notice -->
         {#if !collapsed && currentRole === 'staff'}
           <div class="flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] text-white/40"
                style="background:rgba(255,255,255,0.05);">
@@ -214,6 +290,7 @@
           </div>
         {/if}
 
+        <!-- Sign out -->
         <button
           onclick={handleLogout}
           title={collapsed ? 'Sign out' : ''}
@@ -224,6 +301,7 @@
           <LogOut size={16} class="shrink-0" />
           <span class="{collapsed ? 'lg:hidden' : ''}">Sign out</span>
         </button>
+
       </div>
     </aside>
 

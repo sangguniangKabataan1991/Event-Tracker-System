@@ -220,7 +220,7 @@ router.get('/:id/profile', authenticate, requireStaff, async (req, res) => {
 // ── MANUAL ENCODE (staff + admin) ─────────────────────────────────────────
 router.post('/manual', authenticate, requireStaff, async (req, res) => {
   try {
-    const { program_id, full_name, address, age, contact, barangay, notes } = req.body;
+    const { program_id, full_name, address, age, contact, barangay, notes, received_at } = req.body;
 
     if (!program_id || !full_name || !address || !contact) {
       return res.status(400).json({ error: 'Program, full name, address, and contact are required' });
@@ -246,14 +246,21 @@ router.post('/manual', authenticate, requireStaff, async (req, res) => {
       WHERE b.full_name LIKE ? AND b.address LIKE ?
     `, [`%${full_name}%`, `%${address}%`]);
 
-    const appResult = await run(`
-      INSERT INTO applications (program_id, full_name, address, age, contact, barangay, status, reviewed_by, reviewed_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'approved', ?, NOW())
-    `, [program_id, full_name, address, age || 0, contact, barangay || null, req.user.id]);
-
+    // ✅ FIX: Direct insert — walang dummy application record na ginagawa.
+    // application_id = NULL (nullable sa schema, walang NOT NULL constraint).
     await run(
-      'INSERT INTO beneficiaries (application_id, program_id, full_name, address, contact, notes) VALUES (?,?,?,?,?,?)',
-      [appResult.insertId, program_id, full_name, address, contact, notes || null]
+      `INSERT INTO beneficiaries
+         (application_id, program_id, full_name, address, contact, barangay, notes, received_at)
+       VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        program_id,
+        full_name,
+        address,
+        contact,
+        barangay    || null,
+        notes       || null,
+        received_at || null,
+      ]
     );
 
     await run('UPDATE programs SET slots_used = slots_used + 1 WHERE id = ?', [program_id]);
@@ -288,7 +295,7 @@ router.post('/bulk-import', authenticate, requireStaff, async (req, res) => {
     const warnings     = [];
 
     for (const person of list) {
-      const { full_name, address, age, contact, barangay } = person;
+      const { full_name, address, age, contact, barangay, received_at } = person;
 
       if (!full_name || !address || !contact) { skipped++; continue; }
 
@@ -309,14 +316,18 @@ router.post('/bulk-import', authenticate, requireStaff, async (req, res) => {
         warnings.push(`${full_name} — has history in: ${history.map(h => h.program_title).join(', ')}`);
       }
 
-      const appResult = await run(`
-        INSERT INTO applications (program_id, full_name, address, age, contact, barangay, status, reviewed_by, reviewed_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'approved', ?, NOW())
-      `, [program_id, full_name, address, age || 0, contact, barangay || null, req.user.id]);
-
+      // ✅ FIX: Direct insert — walang dummy application record na ginagawa.
       await run(
-        'INSERT INTO beneficiaries (application_id, program_id, full_name, address, contact) VALUES (?,?,?,?,?)',
-        [appResult.insertId, program_id, full_name, address, contact]
+        `INSERT INTO beneficiaries
+           (application_id, program_id, full_name, address, contact, received_at)
+         VALUES (NULL, ?, ?, ?, ?, ?)`,
+        [
+          program_id,
+          full_name,
+          address,
+          contact,
+          received_at || null,
+        ]
       );
 
       await run('UPDATE programs SET slots_used = slots_used + 1 WHERE id = ?', [program_id]);

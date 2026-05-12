@@ -1,27 +1,30 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { apiFetch } from '$lib/api.js';
-  import Plus from 'lucide-svelte/icons/plus';
-  import Tag from 'lucide-svelte/icons/tag';
-  import ShieldCheck from 'lucide-svelte/icons/shield-check';
-  import UserPlus from 'lucide-svelte/icons/user-plus';
-  import X from 'lucide-svelte/icons/x';
-  import Eye from 'lucide-svelte/icons/eye';
-  import EyeOff from 'lucide-svelte/icons/eye-off';
-  import Pencil from 'lucide-svelte/icons/pencil';
-  import Trash2 from 'lucide-svelte/icons/trash-2';
-  import Save from 'lucide-svelte/icons/save';
-  import MapPin from 'lucide-svelte/icons/map-pin';
-  import Phone from 'lucide-svelte/icons/phone';
-  import User from 'lucide-svelte/icons/user';
-  import Building2 from 'lucide-svelte/icons/building-2';
-  import BadgeCheck from 'lucide-svelte/icons/badge-check';
-  import Mail from 'lucide-svelte/icons/mail';
+  import { onMount, onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
+  import { apiFetch, user, login, openProfileEdit } from '$lib/api.js';
+  import Plus          from 'lucide-svelte/icons/plus';
+  import Tag           from 'lucide-svelte/icons/tag';
+  import ShieldCheck   from 'lucide-svelte/icons/shield-check';
+  import UserPlus      from 'lucide-svelte/icons/user-plus';
+  import X             from 'lucide-svelte/icons/x';
+  import Eye           from 'lucide-svelte/icons/eye';
+  import EyeOff        from 'lucide-svelte/icons/eye-off';
+  import Pencil        from 'lucide-svelte/icons/pencil';
+  import Trash2        from 'lucide-svelte/icons/trash-2';
+  import Save          from 'lucide-svelte/icons/save';
+  import MapPin        from 'lucide-svelte/icons/map-pin';
+  import Phone         from 'lucide-svelte/icons/phone';
+  import User          from 'lucide-svelte/icons/user';
+  import Building2     from 'lucide-svelte/icons/building-2';
+  import BadgeCheck    from 'lucide-svelte/icons/badge-check';
+  import Mail          from 'lucide-svelte/icons/mail';
   import AlertTriangle from 'lucide-svelte/icons/alert-triangle';
+  import UserCog       from 'lucide-svelte/icons/user-cog';
+  import KeyRound      from 'lucide-svelte/icons/key-round';
 
-  interface Category    { name: string; }
-  interface UserRow     { id: number; full_name: string; username: string; role: string; position: string | null; email: string | null; }
-  interface UserForm    { full_name: string; username: string; password: string; position: string; email: string; }
+  interface Category   { name: string; }
+  interface UserRow    { id: number; full_name: string; username: string; role: string; position: string | null; email: string | null; }
+  interface UserForm   { full_name: string; username: string; password: string; position: string; email: string; }
   interface BarangayInfo {
     barangay_name: string; sk_chairperson: string;
     contact: string; address: string; municipality: string;
@@ -40,9 +43,9 @@
   let barangayInfo = $state<BarangayInfo>({
     barangay_name: '', sk_chairperson: '', contact: '', address: '', municipality: ''
   });
-  let newCat   = $state('');
-  let error    = $state('');
-  let success  = $state('');
+  let newCat  = $state('');
+  let error   = $state('');
+  let success = $state('');
 
   // Add User modal
   let showAddUser     = $state(false);
@@ -71,6 +74,22 @@
   // Barangay info
   let editingBarangay = $state(false);
   let barangayLoading = $state(false);
+
+  // ── Profile modal (admin editing own account) ──────────────────────────────
+  let showProfileModal = $state(false);
+  let profileForm      = $state({ full_name: '', username: '', email: '', password: '' });
+  let profileShowPw    = $state(false);
+  let profileError     = $state('');
+  let profileLoading   = $state(false);
+
+  // ── Listen for openProfileEdit trigger from layout ────────────────────────
+  const unsub = openProfileEdit.subscribe(val => {
+    if (val) {
+      openProfileModal();
+      openProfileEdit.set(false);
+    }
+  });
+  onDestroy(unsub);
 
   // ── Load data ──────────────────────────────────────────────────────────────
   onMount(async () => {
@@ -187,20 +206,16 @@
     editFormError = '';
     const position = resolvePosition(editForm.position, editCustomPos, editUsingCustom);
 
-    if (!editForm.full_name)
-      return void (editFormError = 'Full name is required.');
-    if (!editForm.username.trim())
-      return void (editFormError = 'Username is required.');
-    if (!editForm.email.trim())
-      return void (editFormError = 'Email address is required.');
-    if (!position)
-      return void (editFormError = 'Please select or enter a position.');
+    if (!editForm.full_name)       return void (editFormError = 'Full name is required.');
+    if (!editForm.username.trim()) return void (editFormError = 'Username is required.');
+    if (!editForm.email.trim())    return void (editFormError = 'Email address is required.');
+    if (!position)                 return void (editFormError = 'Please select or enter a position.');
     if (editForm.password && editForm.password.length < 6)
       return void (editFormError = 'Password must be at least 6 characters.');
 
     editFormLoading = true;
     try {
-      await apiFetch(`/users/${editingUser.id}`, {
+      const result = await apiFetch(`/users/${editingUser.id}`, {
         method: 'PUT',
         body: {
           full_name: editForm.full_name,
@@ -210,9 +225,16 @@
           email:     editForm.email.trim(),
         }
       });
+
       users = await apiFetch('/users');
       showEditUser = false;
       flash('User updated successfully!');
+
+      const currentUserId = (get(user) as any)?.id;
+      if (result?.newToken && currentUserId === editingUser.id) {
+        login(result.updatedUser, result.newToken);
+        window.location.reload();
+      }
     } catch (e) { editFormError = e instanceof Error ? e.message : 'Error updating user'; }
     finally { editFormLoading = false; }
   }
@@ -229,9 +251,7 @@
     deleteLoading = true;
     try {
       await apiFetch(`/users/${deletingUser.id}`, { method: 'DELETE' });
-      // Optimistically remove from list immediately
       users = users.filter(u => u.id !== deletingUser!.id);
-      // Then re-fetch to confirm sync with server
       users = await apiFetch('/users');
       showDeleteConfirm = false;
       deletingUser = null;
@@ -255,13 +275,53 @@
     finally { barangayLoading = false; }
   }
 
+  // ── Own Profile Edit ───────────────────────────────────────────────────────
+  function openProfileModal() {
+    const me = get(user) as any;
+    profileForm    = { full_name: me?.full_name ?? '', username: me?.username ?? '', email: me?.email ?? '', password: '' };
+    profileError   = '';
+    profileShowPw  = false;
+    showProfileModal = true;
+  }
+
+  async function saveProfile() {
+    profileError = '';
+    if (!profileForm.full_name.trim()) return void (profileError = 'Full name is required.');
+    if (!profileForm.username.trim())  return void (profileError = 'Username is required.');
+    if (!profileForm.email.trim())     return void (profileError = 'Email is required.');
+    if (profileForm.password && profileForm.password.length < 6)
+      return void (profileError = 'Password must be at least 6 characters.');
+
+    profileLoading = true;
+    try {
+      const me = get(user) as any;
+      const result = await apiFetch(`/users/${me.id}`, {
+        method: 'PUT',
+        body: {
+          full_name: profileForm.full_name.trim(),
+          username:  profileForm.username.trim(),
+          email:     profileForm.email.trim(),
+          password:  profileForm.password,
+          position:  me.position ?? 'SK Chairperson',
+        }
+      });
+      showProfileModal = false;
+      flash('Profile updated!');
+      if (result?.newToken) {
+        login(result.updatedUser, result.newToken);
+        window.location.reload();
+      }
+    } catch (e) { profileError = e instanceof Error ? e.message : 'Error saving profile'; }
+    finally { profileLoading = false; }
+  }
+
   // ── Position badge color ───────────────────────────────────────────────────
   function positionBadgeClass(role: string, position: string | null): string {
-    if (role === 'admin')                        return 'bg-purple-100 text-purple-700';
-    if (position === 'SK Chairperson')           return 'bg-purple-100 text-purple-700';
-    if (position === 'SK Secretary')             return 'bg-blue-100 text-blue-700';
-    if (position === 'SK Treasurer')             return 'bg-emerald-100 text-emerald-700';
-    if (position?.startsWith('SK Kagawad'))      return 'bg-amber-100 text-amber-700';
+    if (role === 'admin')                   return 'bg-purple-100 text-purple-700';
+    if (position === 'SK Chairperson')      return 'bg-purple-100 text-purple-700';
+    if (position === 'SK Secretary')        return 'bg-blue-100 text-blue-700';
+    if (position === 'SK Treasurer')        return 'bg-emerald-100 text-emerald-700';
+    if (position?.startsWith('SK Kagawad')) return 'bg-amber-100 text-amber-700';
     return 'bg-gray-100 text-gray-600';
   }
 
@@ -289,6 +349,97 @@
   {/if}
 
   <!-- ══════════════════════════════════════════════════════════════════════
+       PROFILE EDIT MODAL (admin editing own account)
+  ══════════════════════════════════════════════════════════════════════ -->
+  {#if showProfileModal}
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(10,31,68,0.55);">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-5">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                 style="background:#0A1F44;">
+              <UserCog size={18} class="text-white" />
+            </div>
+            <div>
+              <h2 class="text-lg font-bold text-gray-900">My Profile</h2>
+              <p class="text-xs text-gray-400">Update your account details</p>
+            </div>
+          </div>
+          <button onclick={() => showProfileModal = false}
+            class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition">
+            <X size={18} />
+          </button>
+        </div>
+
+        {#if profileError}
+          <div class="bg-red-50 text-red-700 text-sm p-3 rounded-lg mb-4 border border-red-200">
+            {profileError}
+          </div>
+        {/if}
+
+        <div class="space-y-4">
+          <!-- Full Name -->
+          <div>
+            <label class="label" for="pf_fn">
+              <span class="flex items-center gap-1.5">
+                <User size={13} class="text-gray-400" /> Full Name *
+              </span>
+            </label>
+            <input id="pf_fn" bind:value={profileForm.full_name} class="input" />
+          </div>
+
+          <!-- Username -->
+          <div>
+            <label class="label" for="pf_un">Username *</label>
+            <input id="pf_un" bind:value={profileForm.username} class="input" />
+          </div>
+
+          <!-- Email -->
+          <div>
+            <label class="label" for="pf_em">
+              <span class="flex items-center gap-1.5">
+                <Mail size={13} class="text-gray-400" /> Email Address *
+              </span>
+            </label>
+            <input id="pf_em" type="email" bind:value={profileForm.email} class="input" />
+          </div>
+
+          <!-- Password -->
+          <div>
+            <label class="label" for="pf_pw">
+              <span class="flex items-center gap-1.5">
+                <KeyRound size={13} class="text-gray-400" />
+                New Password
+                <span class="text-gray-400 font-normal">(leave blank to keep current)</span>
+              </span>
+            </label>
+            <div class="relative">
+              <input id="pf_pw" type={profileShowPw ? 'text' : 'password'}
+                bind:value={profileForm.password} class="input pr-10" />
+              <button type="button" onclick={() => profileShowPw = !profileShowPw}
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                {#if profileShowPw}<EyeOff size={16} />{:else}<Eye size={16} />{/if}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex gap-2 mt-6">
+          <button onclick={saveProfile} disabled={profileLoading}
+            class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold
+                   text-white transition hover:opacity-90 disabled:opacity-60"
+            style="background:#0A1F44;">
+            <Save size={15} /> {profileLoading ? 'Saving...' : 'Save Changes'}
+          </button>
+          <button onclick={() => showProfileModal = false} class="btn-ghost flex-1">Cancel</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- ══════════════════════════════════════════════════════════════════════
        DELETE CONFIRM MODAL
   ══════════════════════════════════════════════════════════════════════ -->
   {#if showDeleteConfirm && deletingUser}
@@ -306,7 +457,6 @@
           </p>
         </div>
 
-        <!-- User preview -->
         <div class="bg-gray-50 rounded-xl px-4 py-3 mb-5 flex items-center gap-3">
           <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
                style="background:#0A1F44;">
@@ -319,17 +469,16 @@
         </div>
 
         <div class="flex gap-2">
-          <button
-            onclick={confirmDeleteUser}
-            disabled={deleteLoading}
-            class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+          <button onclick={confirmDeleteUser} disabled={deleteLoading}
+            class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold
+                   text-white transition hover:opacity-90 disabled:opacity-60"
             style="background:#DC2626;">
             <Trash2 size={14} /> {deleteLoading ? 'Deleting...' : 'Yes, Delete'}
           </button>
-          <button
-            onclick={() => { showDeleteConfirm = false; deletingUser = null; }}
+          <button onclick={() => { showDeleteConfirm = false; deletingUser = null; }}
             disabled={deleteLoading}
-            class="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition disabled:opacity-60">
+            class="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-600 border border-gray-200
+                   hover:bg-gray-50 transition disabled:opacity-60">
             Cancel
           </button>
         </div>
@@ -420,7 +569,8 @@
 
         <div class="flex gap-2 mt-5">
           <button onclick={addUser} disabled={userFormLoading}
-            class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90"
+            class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold
+                   text-white transition hover:opacity-90"
             style="background:#0A1F44;">
             <UserPlus size={15} /> {userFormLoading ? 'Creating...' : 'Create Account'}
           </button>
@@ -514,7 +664,8 @@
 
         <div class="flex gap-2 mt-5">
           <button onclick={saveEditUser} disabled={editFormLoading}
-            class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90"
+            class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold
+                   text-white transition hover:opacity-90"
             style="background:#0A1F44;">
             <Save size={15} /> {editFormLoading ? 'Saving...' : 'Save Changes'}
           </button>
@@ -534,7 +685,8 @@
       </h2>
       {#if !editingBarangay}
         <button onclick={() => editingBarangay = true}
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#0A1F44] border border-[#0A1F44]/20 hover:bg-[#0A1F44]/5 transition">
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#0A1F44]
+                 border border-[#0A1F44]/20 hover:bg-[#0A1F44]/5 transition">
           <Pencil size={13} /> Edit
         </button>
       {/if}
@@ -565,8 +717,8 @@
       </div>
       <div class="flex gap-2 mt-4">
         <button onclick={saveBarangayInfo} disabled={barangayLoading}
-          class="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white transition hover:opacity-90"
-          style="background:#0A1F44;">
+          class="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white
+                 transition hover:opacity-90" style="background:#0A1F44;">
           <Save size={15} /> {barangayLoading ? 'Saving...' : 'Save Changes'}
         </button>
         <button onclick={() => editingBarangay = false} class="btn-ghost">Cancel</button>
@@ -637,8 +789,8 @@
         <input bind:value={newCat} class="input flex-1" placeholder="New category name..."
           onkeydown={(e) => e.key === 'Enter' && addCategory()} />
         <button onclick={addCategory}
-          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white transition hover:opacity-90"
-          style="background:#0A1F44;">
+          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white
+                 transition hover:opacity-90" style="background:#0A1F44;">
           <Plus size={15} /> Add
         </button>
       </div>
@@ -664,8 +816,8 @@
           <ShieldCheck size={16} style="color:#0A1F44;" /> SK Officers
         </h2>
         <button onclick={openAddUser}
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white transition hover:opacity-90"
-          style="background:#0A1F44;">
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white
+                 transition hover:opacity-90" style="background:#0A1F44;">
           <UserPlus size={13} /> Add Officer
         </button>
       </div>
@@ -696,11 +848,12 @@
             </div>
 
             <!-- Position badge -->
-            <span class="text-[11px] px-2.5 py-0.5 rounded-full font-semibold shrink-0 {positionBadgeClass(u.role, u.position)}">
+            <span class="text-[11px] px-2.5 py-0.5 rounded-full font-semibold shrink-0
+                         {positionBadgeClass(u.role, u.position)}">
               {displayPosition(u)}
             </span>
 
-            <!-- Action buttons — always visible, no hover-only -->
+            <!-- Action buttons — admin row has no edit/delete; other officers do -->
             {#if u.role !== 'admin'}
               <div class="flex gap-1 shrink-0">
                 <button onclick={() => openEditUser(u)}
@@ -714,6 +867,13 @@
                   <Trash2 size={14} />
                 </button>
               </div>
+            {:else}
+              <!-- Admin row: show profile edit shortcut instead -->
+              <button onclick={openProfileModal}
+                class="p-1.5 rounded-lg hover:bg-purple-100 text-purple-400 transition shrink-0"
+                title="Edit your profile">
+                <UserCog size={14} />
+              </button>
             {/if}
           </div>
         {/each}

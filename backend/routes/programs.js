@@ -34,11 +34,11 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { title, description, category, slots, requirements, start_date, end_date, deadline } = req.body;
+    const { title, description, category, slots, requirements, start_date, end_date } = req.body;
     if (!title || !category || !slots) return res.status(400).json({ error: 'Title, category, and slots required' });
     const result = await run(
-      'INSERT INTO programs (title, description, category, slots, requirements, start_date, end_date, deadline, created_by) VALUES (?,?,?,?,?,?,?,?,?)',
-      [title, description || null, category, slots, requirements || null, start_date || null, end_date || null, deadline || null, req.user.id]
+      'INSERT INTO programs (title, description, category, slots, requirements, start_date, end_date, created_by) VALUES (?,?,?,?,?,?,?,?)',
+      [title, description || null, category, slots, requirements || null, start_date || null, end_date || null, req.user.id]
     );
     res.json({ id: result.insertId, message: 'Program created' });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -46,10 +46,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
 router.put('/:id', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { title, description, category, slots, requirements, start_date, end_date, deadline, status } = req.body;
-    await run(`UPDATE programs SET title=?, description=?, category=?, slots=?, requirements=?,
-      start_date=?, end_date=?, deadline=?, status=? WHERE id=?`,
-      [title, description || null, category, slots, requirements || null, start_date || null, end_date || null, deadline || null, status, req.params.id]);
+    const { title, description, category, slots, requirements, start_date, end_date, status } = req.body;
+    await run(
+      `UPDATE programs SET title=?, description=?, category=?, slots=?, requirements=?,
+       start_date=?, end_date=?, status=? WHERE id=?`,
+      [title, description || null, category, slots, requirements || null, start_date || null, end_date || null, status, req.params.id]
+    );
     res.json({ message: 'Program updated' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -64,7 +66,6 @@ router.patch('/:id/status', authenticate, requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── POST duplicate a program ──────────────────────────────────────────────────
 router.post('/:id/duplicate', authenticate, requireAdmin, async (req, res) => {
   try {
     const original = await queryOne('SELECT * FROM programs WHERE id = ?', [req.params.id]);

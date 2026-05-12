@@ -5,6 +5,8 @@ interface UserData {
   username: string;
   full_name: string;
   role: string;
+  position?: string;
+  email?: string;
 }
 
 interface FetchOptions {
@@ -13,8 +15,9 @@ interface FetchOptions {
   body?: unknown;
 }
 
-export const user = writable<UserData | null>(null);
-export const token = writable<string | null>(null);
+export const user           = writable<UserData | null>(null);
+export const token          = writable<string | null>(null);
+export const openProfileEdit = writable<boolean>(false);
 
 if (typeof localStorage !== 'undefined') {
   const t = localStorage.getItem('sk_token');
@@ -51,7 +54,7 @@ export async function apiFetch(path: string, options: FetchOptions = {}) {
     body: options.body ? JSON.stringify(options.body) : undefined
   });
 
-  // ✅ Auto-logout kapag expired/invalid token
+  // Auto-logout kapag expired/invalid token
   if (res.status === 401) {
     logout();
     window.location.href = '/login';

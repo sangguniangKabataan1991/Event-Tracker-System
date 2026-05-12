@@ -5,8 +5,9 @@ import cors    from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname, join }  from 'path';
 import { existsSync, mkdirSync } from 'fs';
-import { initDatabase, query, run } from './db/database.js';
+import { initDatabase, query, queryOne, run } from './db/database.js';
 import { sendWelcomeEmail, verifyEmailConnection } from './services/email.js';
+import { signToken } from './middleware/auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app  = express();
@@ -115,30 +116,51 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
+// ── PUT /api/users/:id — updated with new token issuance ──────────────────
 app.put('/api/users/:id', async (req, res) => {
   try {
-    const { full_name, position, password, email } = req.body;
+    const { full_name, username, position, password, email } = req.body;
+
     if (!full_name)
       return res.status(400).json({ error: 'Full name is required' });
+    if (!username?.trim())
+      return res.status(400).json({ error: 'Username is required' });
 
     if (password && password.length >= 6) {
       const bcrypt = await import('bcryptjs');
       const hash   = await bcrypt.default.hash(password, 10);
       await run(
-        'UPDATE users SET full_name=?, position=?, email=?, password=? WHERE id=?',
-        [full_name, position?.trim() || null, email?.trim() || null, hash, req.params.id]
+        'UPDATE users SET full_name=?, username=?, position=?, email=?, password=? WHERE id=?',
+        [full_name, username.trim(), position?.trim() || null, email?.trim() || null, hash, req.params.id]
       );
     } else {
       await run(
-        'UPDATE users SET full_name=?, position=?, email=? WHERE id=?',
-        [full_name, position?.trim() || null, email?.trim() || null, req.params.id]
+        'UPDATE users SET full_name=?, username=?, position=?, email=? WHERE id=?',
+        [full_name, username.trim(), position?.trim() || null, email?.trim() || null, req.params.id]
       );
     }
 
-    res.json({ message: 'User updated' });
+    // Fetch the updated user record
+    const updatedUser = await queryOne(
+      'SELECT id, username, full_name, role, position, email FROM users WHERE id = ?',
+      [req.params.id]
+    );
+
+    // Issue a fresh token so the edited user's session reflects changes immediately
+    // (used by the frontend if the admin edited their own account, or stored for
+    //  the next time the edited user logs in)
+    const newToken = signToken({
+      id:        updatedUser.id,
+      username:  updatedUser.username,
+      role:      updatedUser.role,
+      position:  updatedUser.position,
+      full_name: updatedUser.full_name,
+    });
+
+    res.json({ message: 'User updated', updatedUser, newToken });
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY')
-      return res.status(400).json({ error: 'Email already in use by another account' });
+      return res.status(400).json({ error: 'Username or email already in use by another account' });
     res.status(500).json({ error: e.message });
   }
 });

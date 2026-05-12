@@ -24,6 +24,8 @@
   import CheckCircle       from 'lucide-svelte/icons/check-circle';
   import Trash2            from 'lucide-svelte/icons/trash-2';
 
+  // ── Type definitions ──────────────────────────────────────────────────────
+
   interface Beneficiary {
     id: string | number;
     full_name: string;
@@ -63,6 +65,8 @@
     records: BenefitRecord[];
   }
 
+  // ── State: list & filters ─────────────────────────────────────────────────
+
   let beneficiaries   = $state<Beneficiary[]>([]);
   let programs        = $state<Program[]>([]);
   let filterProgram   = $state('');
@@ -71,34 +75,42 @@
   let activeTab       = $state<'list' | 'search'>('list');
   let collapsedGroups = $state<Set<string>>(new Set());
 
-  // ── Live search ──────────────────────────────────────────────────────────
+  // ── State: live search ────────────────────────────────────────────────────
+
   let searchQuery   = $state('');
   let searchResults = $state<SearchResult[]>([]);
   let searchLoading = $state(false);
   let searchError   = $state('');
   let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
-  // ── Profile modal ────────────────────────────────────────────────────────
+  // ── State: profile modal ──────────────────────────────────────────────────
+
   let showProfile    = $state(false);
   let profileData    = $state<ProfileDetail | null>(null);
   let profileLoading = $state(false);
 
-  // ── Delete confirm ───────────────────────────────────────────────────────
-  let showDeleteConfirm   = $state(false);
-  let deleteTarget        = $state<Beneficiary | null>(null);
-  let deleteLoading       = $state(false);
-  let globalSuccess       = $state('');
-  let globalError         = $state('');
+  // ── State: delete confirmation ────────────────────────────────────────────
 
-  // ── Manual encode ────────────────────────────────────────────────────────
+  let showDeleteConfirm = $state(false);
+  let deleteTarget      = $state<Beneficiary | null>(null);
+  let deleteLoading     = $state(false);
+  let globalSuccess     = $state('');
+  let globalError       = $state('');
+
+  // ── State: manual encode form ─────────────────────────────────────────────
+
   let showManualForm = $state(false);
-  let manualForm     = $state({ full_name:'', address:'', age:'', contact:'', barangay:'', notes:'', program_id:'' });
+  let manualForm     = $state({
+    full_name: '', address: '', age: '', contact: '',
+    barangay: '', notes: '', program_id: '', received_at: '',
+  });
   let manualLoading  = $state(false);
   let manualError    = $state('');
   let manualSuccess  = $state('');
   let manualWarning  = $state('');
 
-  // ── Excel import ─────────────────────────────────────────────────────────
+  // ── State: Excel import ───────────────────────────────────────────────────
+
   let showImportForm  = $state(false);
   let importProgramId = $state('');
   let importPreview   = $state<any[]>([]);
@@ -109,12 +121,15 @@
   let importSkipped   = $state<string[]>([]);
   let fileInput       = $state<HTMLInputElement | undefined>(undefined);
 
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
+
   onMount(async () => {
     [beneficiaries, programs] = await Promise.all([
       apiFetch('/beneficiaries'),
       apiFetch('/programs'),
     ]);
     loading = false;
+
     const tabParam = page.url.searchParams.get('tab');
     const qParam   = page.url.searchParams.get('q') ?? '';
     if (tabParam === 'search') {
@@ -133,20 +148,26 @@
     collapsedGroups = next;
   }
 
-  // ── Profile ──────────────────────────────────────────────────────────────
+  // ── Profile modal ─────────────────────────────────────────────────────────
+
   async function openProfile(b: Beneficiary) {
     showProfile = true; profileLoading = true; profileData = null;
     try {
       profileData = await apiFetch(`/beneficiaries/${b.id}/profile`);
     } catch {
-      profileData = { full_name: b.full_name, address: b.address, contact: b.contact, age: b.age, barangay: b.barangay, notes: b.notes, records: [] };
+      profileData = {
+        full_name: b.full_name, address: b.address, contact: b.contact,
+        age: b.age, barangay: b.barangay, notes: b.notes, records: [],
+      };
     } finally {
       profileLoading = false;
     }
   }
+
   function closeProfile() { showProfile = false; profileData = null; }
 
-  // ── Delete ───────────────────────────────────────────────────────────────
+  // ── Delete beneficiary ────────────────────────────────────────────────────
+
   function confirmDelete(b: Beneficiary) {
     deleteTarget      = b;
     showDeleteConfirm = true;
@@ -157,7 +178,7 @@
     deleteLoading = true;
     try {
       await apiFetch(`/beneficiaries/${deleteTarget.id}`, { method: 'DELETE' });
-      globalSuccess = `${deleteTarget.full_name} has been removed from beneficiaries.`;
+      globalSuccess     = `${deleteTarget.full_name} has been removed from beneficiaries.`;
       showDeleteConfirm = false;
       deleteTarget      = null;
       await reloadBeneficiaries();
@@ -171,7 +192,8 @@
     }
   }
 
-  // ── Export ───────────────────────────────────────────────────────────────
+  // ── Export to Excel ───────────────────────────────────────────────────────
+
   function exportProgram(programTitle: string, items: Beneficiary[]) {
     const rows = items.map((b, i) => ({
       '#':           i + 1,
@@ -187,7 +209,8 @@
     XLSX.writeFile(wb, `Beneficiaries_${programTitle.replace(/[^a-z0-9]/gi, '_')}.xlsx`);
   }
 
-  // ── Live search (debounced) ───────────────────────────────────────────────
+  // ── Live search (debounced 350ms) ─────────────────────────────────────────
+
   function onSearchInput() {
     if (searchDebounce) clearTimeout(searchDebounce);
     if (!searchQuery.trim()) { searchResults = []; searchError = ''; return; }
@@ -207,6 +230,7 @@
   }
 
   // ── Manual encode ─────────────────────────────────────────────────────────
+
   async function submitManual() {
     if (!manualForm.program_id || !manualForm.full_name || !manualForm.address || !manualForm.contact) {
       manualError = 'Please fill in all required fields (*)'; return;
@@ -216,18 +240,22 @@
       const res = await apiFetch('/beneficiaries/manual', {
         method: 'POST',
         body: {
-          program_id: manualForm.program_id,
-          full_name:  manualForm.full_name,
-          address:    manualForm.address,
-          age:        parseInt(manualForm.age) || 0,
-          contact:    manualForm.contact,
-          barangay:   manualForm.barangay,
-          notes:      manualForm.notes,
+          program_id:  manualForm.program_id,
+          full_name:   manualForm.full_name,
+          address:     manualForm.address,
+          age:         parseInt(manualForm.age) || 0,
+          contact:     manualForm.contact,
+          barangay:    manualForm.barangay,
+          notes:       manualForm.notes,
+          received_at: manualForm.received_at || null,
         },
       });
       manualSuccess = res.message;
       if (res.warning) manualWarning = res.warning;
-      manualForm = { full_name:'', address:'', age:'', contact:'', barangay:'', notes:'', program_id: manualForm.program_id };
+      manualForm = {
+        full_name: '', address: '', age: '', contact: '',
+        barangay: '', notes: '', program_id: manualForm.program_id, received_at: '',
+      };
       await reloadBeneficiaries();
     } catch (e) {
       manualError = e instanceof Error ? e.message : 'An error occurred';
@@ -236,11 +264,89 @@
     }
   }
 
+  // ── Parse date from Excel (timezone-safe) ─────────────────────────────────
+  //
+  // APPROACH:
+  //   Case 1 — Excel serial number (e.g. 46152):
+  //     Converted using UTC math from Excel's epoch (Dec 30, 1899).
+  //     Result is formatted directly as YYYY-MM-DD without creating a
+  //     local Date object, so no timezone shift occurs.
+  //
+  //   Case 2 — ISO string "YYYY-MM-DD":
+  //     Digits are extracted directly via regex — no Date parsing at all,
+  //     so there is zero risk of a UTC-to-local shift.
+  //
+  //   Case 3 — Other date strings (e.g. "May 12, 2026"):
+  //     Parsed with new Date(), then LOCAL date parts are read
+  //     (getFullYear / getMonth / getDate) instead of their UTC equivalents.
+  //     This matches what the user sees in their locale, preventing the
+  //     off-by-one-day bug that occurs when UTC midnight is interpreted
+  //     in a UTC+8 (PH) environment.
+  //
+  //   Case 4 — JS Date object (should not occur when cellDates is off):
+  //     Same as Case 3 — local date parts are used.
+
+  function parseExcelDate(value: any): string {
+    if (!value) return '';
+
+    // ── Case 1: Excel serial number (e.g. 46152) ──────────────────────────
+    if (typeof value === 'number') {
+      const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+      const date = new Date(excelEpoch.getTime() + Math.floor(value) * 86400 * 1000);
+      if (!isNaN(date.getTime())) {
+        const yyyy = date.getUTCFullYear();
+        const mm   = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const dd   = String(date.getUTCDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
+    }
+
+    if (typeof value === 'string') {
+      // ── Case 2: ISO date string "YYYY-MM-DD" ──────────────────────────
+      const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) {
+        return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+      }
+
+      // ── Case 3: Other string formats (e.g. "May 12, 2026") ────────────
+      const parsed = new Date(value);
+      if (!isNaN(parsed.getTime())) {
+        const yyyy = parsed.getFullYear();
+        const mm   = String(parsed.getMonth() + 1).padStart(2, '0');
+        const dd   = String(parsed.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
+    }
+
+    // ── Case 4: JS Date object ────────────────────────────────────────────
+    if (value instanceof Date && !isNaN(value.getTime())) {
+      const yyyy = value.getFullYear();
+      const mm   = String(value.getMonth() + 1).padStart(2, '0');
+      const dd   = String(value.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    return '';
+  }
+
   // ── Excel import ──────────────────────────────────────────────────────────
+
   function downloadTemplate() {
     const template = [
-      { 'Full Name': 'Juan Dela Cruz', Address: 'Blk 1 Lot 2, Sample St., Sto. Nino', Age: 18, Contact: '09123456789' },
-      { 'Full Name': 'Maria Santos',   Address: 'Blk 3 Lot 4, Sample St., Sto. Nino', Age: 20, Contact: '09987654321' },
+      {
+        'Full Name':   'Juan Dela Cruz',
+        'Address':     'Blk 1 Lot 2, Sample St., Sto. Nino',
+        'Age':         18,
+        'Contact':     '09123456789',
+        'Received At': '2026-05-10',
+      },
+      {
+        'Full Name':   'Maria Santos',
+        'Address':     'Blk 3 Lot 4, Sample St., Sto. Nino',
+        'Age':         20,
+        'Contact':     '09987654321',
+        'Received At': '2026-05-10',
+      },
     ];
     const ws = XLSX.utils.json_to_sheet(template);
     const wb = XLSX.utils.book_new();
@@ -252,24 +358,41 @@
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
     importError = ''; importPreview = [];
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const data     = new Uint8Array(e.target?.result as ArrayBuffer);
+
+        // cellDates is intentionally omitted (defaults to false).
+        // xlsx returns date cells as raw serial numbers, which parseExcelDate()
+        // handles via UTC math — no timezone shift occurs.
         const workbook = XLSX.read(data, { type: 'array' });
+
         const sheet    = workbook.Sheets[workbook.SheetNames[0]];
         const rows     = XLSX.utils.sheet_to_json(sheet) as any[];
-        if (rows.length === 0) { importError = 'The uploaded file contains no data.'; return; }
+
+        if (rows.length === 0) {
+          importError = 'The uploaded file contains no data.';
+          return;
+        }
+
         importPreview = rows
           .map((row) => ({
-            full_name: row['Full Name'] || row['full_name'] || row['Name'] || row['name'] || '',
-            address:   row['Address']   || row['address']   || '',
-            age:       row['Age']       || row['age']       || '',
-            contact:   row['Contact']   || row['contact']   || row['Contact Number'] || '',
+            full_name:   row['Full Name']  || row['full_name']  || row['Name']    || row['name']    || '',
+            address:     row['Address']    || row['address']    || '',
+            // ↓ FIX: use ?? instead of || so numeric 0 is not treated as falsy
+            age:         row['Age'] ?? row['age'] ?? '',
+            // ↓ FIX: .toString() preserves leading zeros stripped by Excel
+            contact:     (row['Contact'] ?? row['contact'] ?? row['Contact Number'] ?? '').toString(),
+            received_at: parseExcelDate(
+              row['Received At'] || row['received_at'] || row['Date Received'] || row['date'] || ''
+            ),
           }))
           .filter((r) => r.full_name);
+
         if (importPreview.length === 0) {
-          importError = 'No valid records found. Make sure columns are: "Full Name", "Address", "Age", "Contact".';
+          importError = 'No valid records found. Make sure columns are: "Full Name", "Address", "Age", "Contact", "Received At".';
         }
       } catch {
         importError = 'Could not read file. Please upload a valid .xlsx or .xls file.';
@@ -279,9 +402,12 @@
   }
 
   async function submitImport() {
-    if (!importProgramId) { importError = 'Please select a program'; return; }
+    if (!importProgramId)         { importError = 'Please select a program'; return; }
     if (importPreview.length === 0) { importError = 'No data to import'; return; }
-    importLoading = true; importError = ''; importSuccess = ''; importWarnings = []; importSkipped = [];
+
+    importLoading = true; importError = ''; importSuccess = '';
+    importWarnings = []; importSkipped = [];
+
     try {
       const res = await apiFetch('/beneficiaries/bulk-import', {
         method: 'POST',
@@ -302,11 +428,12 @@
 
   function closeImport() {
     showImportForm = false; importPreview = []; importError = '';
-    importSuccess = ''; importWarnings = []; importSkipped = [];
+    importSuccess  = ''; importWarnings = []; importSkipped = [];
     if (fileInput) fileInput.value = '';
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
   function statusBadgeClass(status: string) {
     if (status === 'approved') return 'bg-emerald-100 text-emerald-700';
     if (status === 'rejected') return 'bg-red-100 text-red-700';
@@ -316,8 +443,12 @@
   }
 
   function fmtDate(d: string) {
-    return new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Date(d).toLocaleDateString('en-PH', {
+      month: 'short', day: 'numeric', year: 'numeric',
+    });
   }
+
+  // ── Derived state ─────────────────────────────────────────────────────────
 
   let filtered = $derived(
     beneficiaries.filter((b) => {
@@ -337,7 +468,7 @@
   );
 </script>
 
-<!-- ══ DELETE CONFIRMATION MODAL ═════════════════════════════════════════════ -->
+<!-- ══ DELETE CONFIRMATION MODAL ══════════════════════════════════════════════ -->
 {#if showDeleteConfirm && deleteTarget}
   <div class="fixed inset-0 z-50 flex items-center justify-center p-4"
     style="background: rgba(10,31,68,0.5); backdrop-filter: blur(2px);">
@@ -588,6 +719,7 @@
                     <th class="px-3 py-2 font-medium">Address</th>
                     <th class="px-3 py-2 font-medium">Age</th>
                     <th class="px-3 py-2 font-medium">Contact</th>
+                    <th class="px-3 py-2 font-medium">Received At</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -598,11 +730,12 @@
                       <td class="px-3 py-2 text-gray-500 max-w-40 truncate">{row.address}</td>
                       <td class="px-3 py-2 text-gray-500">{row.age || '—'}</td>
                       <td class="px-3 py-2 text-gray-500">{row.contact}</td>
+                      <td class="px-3 py-2 text-gray-500">{row.received_at || '—'}</td>
                     </tr>
                   {/each}
                   {#if importPreview.length > 10}
                     <tr>
-                      <td colspan="5" class="px-3 py-2 text-center text-gray-400 italic">
+                      <td colspan="6" class="px-3 py-2 text-center text-gray-400 italic">
                         ...and {importPreview.length - 10} more
                       </td>
                     </tr>
@@ -680,6 +813,12 @@
             <label class="label" for="mbrgy">Barangay</label>
             <input id="mbrgy" bind:value={manualForm.barangay} class="input" />
           </div>
+          <div>
+            <label class="label" for="mreceived">
+              Date Received <span class="text-gray-400 font-normal">(optional — default: today)</span>
+            </label>
+            <input id="mreceived" bind:value={manualForm.received_at} type="date" class="input" />
+          </div>
           <div class="md:col-span-2">
             <label class="label" for="maddr">Address *</label>
             <input id="maddr" bind:value={manualForm.address} class="input" />
@@ -718,7 +857,7 @@
       </div>
     </div>
 
-    <!-- List -->
+    <!-- Beneficiaries list -->
     {#if loading}
       <div class="flex items-center gap-2 text-gray-400 text-sm py-8">
         <div class="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
@@ -741,7 +880,7 @@
           {@const collapsed = collapsedGroups.has(programTitle)}
           <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:border-slate-300 transition-all">
 
-            <!-- Group Header -->
+            <!-- Group header -->
             <div class="flex items-center gap-2 sm:gap-3 px-4 py-3 bg-slate-50/70 border-b border-slate-100">
               <button onclick={() => toggleGroup(programTitle)} class="flex items-center gap-2 flex-1 min-w-0 text-left">
                 <span class="text-slate-400 shrink-0">
@@ -764,7 +903,7 @@
             </div>
 
             {#if !collapsed}
-              <!-- Desktop Table -->
+              <!-- Desktop table -->
               <div class="hidden md:block overflow-x-auto">
                 <table class="w-full text-sm" style="table-layout: fixed;">
                   <colgroup>
@@ -813,7 +952,7 @@
                 </table>
               </div>
 
-              <!-- Mobile Cards -->
+              <!-- Mobile cards -->
               <div class="md:hidden divide-y divide-gray-100">
                 {#each group.items as b}
                   <div class="flex items-center gap-3 px-4 py-3 hover:bg-blue-50/40 transition-colors">
