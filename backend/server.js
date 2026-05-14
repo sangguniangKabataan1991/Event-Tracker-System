@@ -146,9 +146,6 @@ app.put('/api/users/:id', async (req, res) => {
       [req.params.id]
     );
 
-    // Issue a fresh token so the edited user's session reflects changes immediately
-    // (used by the frontend if the admin edited their own account, or stored for
-    //  the next time the edited user logs in)
     const newToken = signToken({
       id:        updatedUser.id,
       username:  updatedUser.username,
