@@ -215,8 +215,8 @@ app.get('/api/health', (_, res) => res.json({ status: 'OK', time: new Date().toI
 initDatabase()
   .then(async () => {
     await verifyEmailConnection();
-    app.listen(PORT, '223.25.56.125', () => {
-      console.log(`\n SK System Backend running at http://223.25.56.125:${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`\n SK System Backend running at http://0.0.0.0:${PORT}`);
       console.log(` Database: MySQL (${process.env.DB_NAME || 'sk_system'})`);
       console.log(` Default admin: username=admin password=admin123\n`);
     });
