@@ -33,7 +33,8 @@ export function logout() {
   localStorage.removeItem('sk_portal_user');
 }
 
-export const API = 'http://localhost:3000/api';
+// http://localhost:3000/api
+export const API = 'https://event-tracker-system.onrender.com/api';
 
 /**
  * @param {string} path
