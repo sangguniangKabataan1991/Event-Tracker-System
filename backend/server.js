@@ -21,8 +21,8 @@ app.use(cors({
     'http://localhost:5173',
     'http://localhost:5174',
     'http://localhost:4173',
-    'https://sk-admin-three.vercel.app'
-    // 'https://sk-portal-three.vercel.app'
+    'https://sk-admin-three.vercel.app',
+    'https://sk-portal-three.vercel.app'
   ],
 }));
 app.use(express.json());
