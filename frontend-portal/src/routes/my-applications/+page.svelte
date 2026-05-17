@@ -89,15 +89,16 @@
 		}
 	}
 
-	onMount(async () => {
+	onMount(() => {
 		if (!$user) {
 			goto('/login');
 			return;
 		}
 
 		loading = true;
-		await loadApplications(true);
-		loading = false;
+		loadApplications(true).then(() => {
+			loading = false;
+		});
 
 		const params = new URLSearchParams(window.location.search);
 		if (params.get('submitted') === '1') {
@@ -213,7 +214,7 @@
 							</div>
 
 							<div class="text-xs text-slate-400">
-								Submitted: {new Date(app.created_at).toLocaleDateString('fil-PH', {
+								Submitted: {new Date(app.created_at).toLocaleDateString('en-US', {
 									year: 'numeric', month: 'long', day: 'numeric'
 								})}
 							</div>

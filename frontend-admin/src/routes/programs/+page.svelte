@@ -395,7 +395,7 @@
         style="background: #0A1F44;">
         <Plus size={14} />
         <span class="hidden xs:inline">New Program</span>
-        <span class="xs:hidden">New</span>
+        <span class="xs:hidden">New Program</span>
       </button>
     </div>
   </div>

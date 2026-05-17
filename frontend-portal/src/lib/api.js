@@ -1,6 +1,6 @@
 import { writable, get } from 'svelte/store';
 
-/** @typedef {{ id: number, full_name: string, email: string, role: string }} UserData */
+/** @typedef {{ id: number, full_name: string, email: string, role: string, contact?: string, barangay?: string, address?: string }} UserData */
 
 /** @type {import('svelte/store').Writable<UserData | null>} */
 export const user = writable(null);
@@ -33,8 +33,7 @@ export function logout() {
   localStorage.removeItem('sk_portal_user');
 }
 
-// http://localhost:3000/api
-export const API = 'https://event-tracker-system.onrender.com/api';
+export const API = 'http://localhost:3000/api';
 
 /**
  * @param {string} path

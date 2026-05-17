@@ -51,14 +51,13 @@
           </div>
           <p class="text-white font-semibold text-sm mb-2">Check your email</p>
           <p class="text-white/40 text-xs leading-relaxed mb-6">
-            Kung may account na naka-associate sa <span class="text-white/70">{email}</span>, makakatanggap ka ng password reset link.
+            If an account is associated with <span class="text-white/70">{email}</span>, you will receive a password reset link shortly.
           </p>
-          <a
-            href="/login"
+          <a href="/login"
             class="inline-flex items-center gap-1.5 text-xs transition"
             style="color: rgba(255,255,255,0.4);"
-            onmouseenter={(e) => (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.8)'}
-            onmouseleave={(e) => (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.4)'}
+            onmouseenter={(e: MouseEvent) => (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.8)'}
+            onmouseleave={(e: MouseEvent) => (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.4)'}
           >
             Back to Sign In
           </a>
@@ -67,7 +66,7 @@
       {:else}
         <p class="text-white/60 text-xs font-semibold uppercase tracking-widest mb-2">Reset your password</p>
         <p class="text-white/30 text-xs mb-5 leading-relaxed">
-          I-enter ang email address na naka-associate sa iyong account at magpapadala kami ng reset link.
+          Enter the email address associated with your account and we will send you a reset link.
         </p>
 
         <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="space-y-3">
@@ -105,12 +104,11 @@
         </form>
 
         <div class="mt-5 text-center">
-          <a
-            href="/login"
+          <a href="/login"
             class="inline-flex items-center gap-1.5 text-xs transition"
             style="color: rgba(255,255,255,0.4);"
-            onmouseenter={(e) => (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.8)'}
-            onmouseleave={(e) => (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.4)'}
+            onmouseenter={(e: MouseEvent) => (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.8)'}
+            onmouseleave={(e: MouseEvent) => (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.4)'}
           >
             <ArrowLeft size={12} /> Back to Sign In
           </a>

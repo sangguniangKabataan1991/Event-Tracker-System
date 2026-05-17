@@ -9,14 +9,14 @@ const pool = mysql.createPool({
   user:     process.env.DB_USER     || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME     || 'sk_system',
-  ssl: {
-    minVersion: 'TLSv1.2',
-    rejectUnauthorized: true
-  },
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  charset: 'utf8mb4'
+  charset: 'utf8mb4',
+  ssl: {
+    minVersion: 'TLSv1.2',
+    rejectUnauthorized: true,
+  },
 });
 
 export async function query(sql, params = []) {
@@ -58,6 +58,8 @@ export async function initDatabase() {
     `ALTER TABLE users MODIFY COLUMN role ENUM('admin','staff','applicant') NOT NULL DEFAULT 'staff'`,
     // ── Beneficiaries: add barangay column if not yet existing ──────────────
     `ALTER TABLE beneficiaries ADD COLUMN IF NOT EXISTS barangay VARCHAR(100) DEFAULT NULL`,
+    // ── Beneficiaries: add age column if not yet existing ───────────────────
+    `ALTER TABLE beneficiaries ADD COLUMN IF NOT EXISTS age INT DEFAULT NULL`,
   ];
   for (const sql of migrations) {
     try { await pool.execute(sql); } catch (_) {}
@@ -143,6 +145,7 @@ export async function initDatabase() {
     program_id INT NOT NULL,
     full_name VARCHAR(200) NOT NULL,
     address TEXT NOT NULL,
+    age INT DEFAULT NULL,
     contact VARCHAR(50) NOT NULL,
     barangay VARCHAR(100) DEFAULT NULL,
     benefit_received TEXT,

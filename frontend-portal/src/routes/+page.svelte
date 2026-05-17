@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch } from '$lib/api.js';
 	import { user } from '$lib/api.js';
@@ -13,11 +13,23 @@
 		ChevronRight
 	} from 'lucide-svelte';
 
-	let programs = $state([]);
+	interface Program {
+		id: number;
+		title: string;
+		category: string;
+		description?: string;
+		slots: number;
+		slots_used: number;
+		start_date?: string;
+		end_date?: string;
+		requirements?: string;
+	}
+
+	let programs = $state<Program[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 
-	let appliedPrograms = $state([]);
+	let appliedPrograms = $state<number[]>([]);
 
 	onMount(async () => {
 		try {
@@ -25,7 +37,7 @@
 
 			if ($user) {
 				const myApplications = await apiFetch('/applications/my');
-				appliedPrograms = myApplications.map((app) => app.program_id);
+				appliedPrograms = myApplications.map((app: { program_id: number }) => app.program_id);
 			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Error';
@@ -34,7 +46,7 @@
 		}
 	});
 
-	function hasApplied(programId) {
+	function hasApplied(programId: number) {
 		return appliedPrograms.includes(programId);
 	}
 </script>
@@ -46,9 +58,7 @@
 		style="background: linear-gradient(135deg, #0A1F44 0%, #0d2756 60%, #162d5e 100%);"
 	>
 		<div class="mb-3 flex justify-center">
-			<div class="rounded-2xl p-3" style="background: rgba(255,255,255,0.10);">
-				<img src="/logo.png" alt="Logo" class="h-12 w-12 object-contain" />
-			</div>
+			<img src="/logo.png" alt="Logo" class="h-26 w-26 object-contain" />
 		</div>
 
 		<h1 class="mb-2 text-2xl font-bold tracking-tight">SK Beneficiary Programs</h1>
@@ -119,7 +129,7 @@
 									<span
 										class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"
 									>
-										<CircleCheck class="h-3 w-3" /> OPEN
+										<CircleCheck class="h-3 w-3" /> Open
 									</span>
 
 									<span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
@@ -131,7 +141,6 @@
 									{program.description || 'Walang detalye.'}
 								</p>
 
-								<!-- End Date -->
 								<div class="flex flex-wrap gap-4 text-xs text-slate-500">
 									<span class="flex items-center gap-1">
 										<Users class="h-3.5 w-3.5" />
@@ -182,7 +191,7 @@
 										<span
 											class="block rounded-lg bg-slate-100 px-3 py-2 text-center text-xs text-slate-400"
 										>
-											Fully booked
+											Slots Full
 										</span>
 									{:else}
 										<a

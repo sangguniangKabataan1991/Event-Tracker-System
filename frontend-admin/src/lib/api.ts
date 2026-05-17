@@ -40,7 +40,7 @@ export function logout() {
   localStorage.removeItem('sk_user');
 }
 
-export const API = import.meta.env.VITE_API_URL || 'https://event-tracker-system.onrender.com/api';
+export const API = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 export async function apiFetch(path: string, options: FetchOptions = {}) {
   const t = get(token);

@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { apiFetch } from '$lib/api';
+  import { apiFetch, API } from '$lib/api';
   import Lock from 'lucide-svelte/icons/lock';
   import Eye from 'lucide-svelte/icons/eye';
   import EyeOff from 'lucide-svelte/icons/eye-off';
@@ -31,11 +31,19 @@
       return;
     }
     try {
-      const res = await apiFetch(`/auth/reset-password/verify?token=${token}`);
-      tokenValid = res.valid;
-      fullName   = res.full_name ?? '';
+      // ✅ Direct fetch — bypass apiFetch para walang auto-logout interference
+      const res  = await fetch(`${API}/auth/reset-password/verify?token=${token}`);
+      const data = await res.json();
+
+      if (!res.ok || !data.valid) {
+        tokenError = data.error || 'This reset link is invalid or has expired.';
+        tokenValid = false;
+      } else {
+        tokenValid = true;
+        fullName   = data.full_name ?? '';
+      }
     } catch (e) {
-      tokenError = e instanceof Error ? e.message : 'Invalid or expired link.';
+      tokenError = 'Unable to verify reset link. Please try again.';
     } finally {
       validating = false;
     }
@@ -96,7 +104,7 @@
           </div>
           <p class="text-white font-semibold text-sm mb-2">Password Reset!</p>
           <p class="text-white/40 text-xs leading-relaxed mb-4">
-            Matagumpay na na-reset ang iyong password. Ire-redirect ka sa login page in 3 seconds.
+            Your password has been reset successfully. You will be redirected to the login page in 3 seconds.
           </p>
           <a href="/login" class="text-xs underline" style="color: rgba(255,255,255,0.5);">
             Go to Login now →
@@ -124,10 +132,10 @@
         <p class="text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">Set New Password</p>
         {#if fullName}
           <p class="text-white/40 text-xs mb-5">
-            Kamusta <span class="text-white/70">{fullName}</span>, pumili ng bagong password.
+            Hello <span class="text-white/70">{fullName}</span>, please choose a new password.
           </p>
         {:else}
-          <p class="text-white/40 text-xs mb-5">Pumili ng bagong password para sa iyong account.</p>
+          <p class="text-white/40 text-xs mb-5">Choose a new password for your account.</p>
         {/if}
 
         <form onsubmit={(e) => { e.preventDefault(); handleReset(); }} class="space-y-3">
@@ -175,7 +183,7 @@
           </div>
 
           {#if error}
-            <div class="text-xs rounded-lg px-3 py2"
+            <div class="text-xs rounded-lg px-3 py-2"
                  style="background: rgba(220,38,38,0.15); border: 1px solid rgba(220,38,38,0.3); color: #fca5a5;">
               {error}
             </div>

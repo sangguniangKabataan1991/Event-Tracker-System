@@ -353,13 +353,7 @@
 
 				<!-- Actions -->
 				<div class="flex flex-col-reverse sm:flex-row gap-3 pt-1">
-					<a
-						href="/"
-						class="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2.5 text-sm text-slate-600 transition hover:border-slate-300"
-					>
-						<ArrowLeft class="h-4 w-4" />
-						Back
-					</a>
+					
 					<button
 						type="submit"
 						disabled={submitting}

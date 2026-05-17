@@ -110,6 +110,7 @@ router.post('/forgot-password', async (req, res) => {
       to:        user.email,
       full_name: user.full_name,
       token,
+      role:      user.role,
     });
 
     res.json({ message: 'If that email exists, a reset link has been sent.' });
@@ -120,38 +121,40 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // ── RESET PASSWORD ─────────────────────────────────────────────────────────
-router.post('/forgot-password', async (req, res) => {
+router.post('/reset-password', async (req, res) => {
   try {
-    const { email } = req.body;
-    if (!email)
-      return res.status(400).json({ error: 'Email is required' });
+    const { token, password } = req.body;
+    if (!token || !password)
+      return res.status(400).json({ error: 'Token and password are required' });
+    if (password.length < 6)
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
-    const user = await queryOne('SELECT * FROM users WHERE email = ?', [email]);
-
-    if (!user)
-      return res.json({ message: 'If that email exists, a reset link has been sent.' });
-
-    const token     = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-
-    await run(
-      `INSERT INTO password_resets (user_id, token, expires_at)
-       VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE token = VALUES(token), expires_at = VALUES(expires_at)`,
-      [user.id, token, expiresAt]
+    const reset = await queryOne(
+      `SELECT * FROM password_resets 
+       WHERE token = ? AND expires_at > NOW()`,
+      [token]
     );
 
-    await sendPasswordResetEmail({
-      to:        user.email,
-      full_name: user.full_name,
-      token,
-      role:      user.role,  
-    });
+    if (!reset)
+      return res.status(400).json({ error: 'Link is invalid or expired.' });
 
-    res.json({ message: 'If that email exists, a reset link has been sent.' });
+    const hash = await bcrypt.hash(password, 10);
+
+    await run(
+      'UPDATE users SET password = ? WHERE id = ?',
+      [hash, reset.user_id]
+    );
+
+    // Delete the used token
+    await run(
+      'DELETE FROM password_resets WHERE token = ?',
+      [token]
+    );
+
+    res.json({ message: 'Password reset successfully.' });
   } catch (e) {
-    console.error('Forgot password error:', e.message);
-    res.status(500).json({ error: 'Failed to send reset email. Check email configuration.' });
+    console.error('Reset password error:', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 

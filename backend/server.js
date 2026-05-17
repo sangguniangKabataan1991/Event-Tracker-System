@@ -22,8 +22,11 @@ app.use(cors({
     'http://localhost:5174',
     'http://localhost:4173',
     'https://sk-admin-three.vercel.app',
-    'https://sk-portal-three.vercel.app'
+    'https://sk-portal-three.vercel.app',
   ],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400,
 }));
 app.use(express.json());
 app.use('/uploads', express.static(uploadsDir));
@@ -217,8 +220,8 @@ app.get('/api/health', (_, res) => res.json({ status: 'OK', time: new Date().toI
 initDatabase()
   .then(async () => {
     await verifyEmailConnection();
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`\n SK System Backend running at http://0.0.0.0:${PORT}`);
+    app.listen(PORT, () => {
+      console.log(`\n SK System Backend running at http://localhost:${PORT}`);
       console.log(` Database: MySQL (${process.env.DB_NAME || 'sk_system'})`);
       console.log(` Default admin: username=admin password=admin123\n`);
     });

@@ -3,14 +3,13 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: May 02, 2026 at 01:55 PM
+-- Generation Time: May 17, 2026
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
-
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -73,7 +72,9 @@ CREATE TABLE `beneficiaries` (
   `program_id` int(11) NOT NULL,
   `full_name` varchar(200) NOT NULL,
   `address` text NOT NULL,
+  `age` int(11) DEFAULT NULL,
   `contact` varchar(50) NOT NULL,
+  `barangay` varchar(100) DEFAULT NULL,
   `benefit_received` text DEFAULT NULL,
   `received_at` datetime DEFAULT current_timestamp(),
   `notes` text DEFAULT NULL
@@ -139,7 +140,8 @@ CREATE TABLE `users` (
   `username` varchar(100) NOT NULL,
   `password` varchar(255) NOT NULL,
   `full_name` varchar(200) NOT NULL,
-  `role` enum('admin','applicant') NOT NULL,
+  `role` enum('admin','staff','applicant') NOT NULL DEFAULT 'staff',
+  `position` varchar(100) DEFAULT NULL,
   `email` varchar(200) DEFAULT NULL,
   `contact` varchar(50) DEFAULT NULL,
   `address` text DEFAULT NULL,
@@ -151,8 +153,8 @@ CREATE TABLE `users` (
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`id`, `username`, `password`, `full_name`, `role`, `email`, `contact`, `address`, `barangay`, `created_at`) VALUES
-(1, 'admin', '$2b$10$kgmaesEMUjvJBtNnWk4ihuqgAWNz8o1sSfOEoXzxjjhC9gl.XPcqu', 'SK Admin', 'admin', NULL, NULL, NULL, NULL, '2026-05-01 18:03:31');
+INSERT INTO `users` (`id`, `username`, `password`, `full_name`, `role`, `position`, `email`, `contact`, `address`, `barangay`, `created_at`) VALUES
+(1, 'admin', '$2b$10$kgmaesEMUjvJBtNnWk4ihuqgAWNz8o1sSfOEoXzxjjhC9gl.XPcqu', 'SK Admin', 'admin', 'SK Chairperson', NULL, NULL, NULL, NULL, '2026-05-01 18:03:31');
 
 --
 -- Indexes for dumped tables
@@ -200,7 +202,8 @@ ALTER TABLE `program_categories`
 --
 ALTER TABLE `users`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `username` (`username`);
+  ADD UNIQUE KEY `username` (`username`),
+  ADD UNIQUE KEY `idx_users_email` (`email`);
 
 --
 -- AUTO_INCREMENT for dumped tables
@@ -266,6 +269,7 @@ ALTER TABLE `beneficiaries`
 --
 ALTER TABLE `programs`
   ADD CONSTRAINT `programs_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL;
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

@@ -193,15 +193,21 @@
   }
 
   // ── Export to Excel ───────────────────────────────────────────────────────
+  // Column order matches the import template exactly so exported files
+  // can be re-imported without modification.
 
   function exportProgram(programTitle: string, items: Beneficiary[]) {
     const rows = items.map((b, i) => ({
       '#':           i + 1,
       'Full Name':   b.full_name,
       'Address':     b.address,
-      'Age':         b.age || '—',
+      'Age':         b.age ?? '',
       'Contact':     b.contact,
-      'Received At': b.received_at ? new Date(b.received_at).toLocaleDateString('en-PH') : '',
+      'Received At': b.received_at
+        ? new Date(b.received_at).toLocaleDateString('en-PH', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+          })
+        : '',
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -265,31 +271,11 @@
   }
 
   // ── Parse date from Excel (timezone-safe) ─────────────────────────────────
-  //
-  // APPROACH:
-  //   Case 1 — Excel serial number (e.g. 46152):
-  //     Converted using UTC math from Excel's epoch (Dec 30, 1899).
-  //     Result is formatted directly as YYYY-MM-DD without creating a
-  //     local Date object, so no timezone shift occurs.
-  //
-  //   Case 2 — ISO string "YYYY-MM-DD":
-  //     Digits are extracted directly via regex — no Date parsing at all,
-  //     so there is zero risk of a UTC-to-local shift.
-  //
-  //   Case 3 — Other date strings (e.g. "May 12, 2026"):
-  //     Parsed with new Date(), then LOCAL date parts are read
-  //     (getFullYear / getMonth / getDate) instead of their UTC equivalents.
-  //     This matches what the user sees in their locale, preventing the
-  //     off-by-one-day bug that occurs when UTC midnight is interpreted
-  //     in a UTC+8 (PH) environment.
-  //
-  //   Case 4 — JS Date object (should not occur when cellDates is off):
-  //     Same as Case 3 — local date parts are used.
 
   function parseExcelDate(value: any): string {
     if (!value) return '';
 
-    // ── Case 1: Excel serial number (e.g. 46152) ──────────────────────────
+    // Case 1: Excel serial number
     if (typeof value === 'number') {
       const excelEpoch = new Date(Date.UTC(1899, 11, 30));
       const date = new Date(excelEpoch.getTime() + Math.floor(value) * 86400 * 1000);
@@ -302,13 +288,11 @@
     }
 
     if (typeof value === 'string') {
-      // ── Case 2: ISO date string "YYYY-MM-DD" ──────────────────────────
+      // Case 2: ISO date string "YYYY-MM-DD"
       const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (isoMatch) {
-        return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-      }
+      if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
 
-      // ── Case 3: Other string formats (e.g. "May 12, 2026") ────────────
+      // Case 3: Other string formats (e.g. "5/17/2026")
       const parsed = new Date(value);
       if (!isNaN(parsed.getTime())) {
         const yyyy = parsed.getFullYear();
@@ -318,7 +302,7 @@
       }
     }
 
-    // ── Case 4: JS Date object ────────────────────────────────────────────
+    // Case 4: JS Date object
     if (value instanceof Date && !isNaN(value.getTime())) {
       const yyyy = value.getFullYear();
       const mm   = String(value.getMonth() + 1).padStart(2, '0');
@@ -329,23 +313,27 @@
     return '';
   }
 
-  // ── Excel import ──────────────────────────────────────────────────────────
+  // ── Download import template ──────────────────────────────────────────────
+  // Columns match exportProgram() exactly so users can re-import
+  // an exported file without any changes.
 
   function downloadTemplate() {
     const template = [
       {
+        '#':           1,
         'Full Name':   'Juan Dela Cruz',
         'Address':     'Blk 1 Lot 2, Sample St., Sto. Nino',
         'Age':         18,
         'Contact':     '09123456789',
-        'Received At': '2026-05-10',
+        'Received At': '05/10/2026',
       },
       {
+        '#':           2,
         'Full Name':   'Maria Santos',
         'Address':     'Blk 3 Lot 4, Sample St., Sto. Nino',
         'Age':         20,
         'Contact':     '09987654321',
-        'Received At': '2026-05-10',
+        'Received At': '05/10/2026',
       },
     ];
     const ws = XLSX.utils.json_to_sheet(template);
@@ -353,6 +341,8 @@
     XLSX.utils.book_append_sheet(wb, ws, 'Beneficiaries');
     XLSX.writeFile(wb, 'SK_Beneficiary_Template.xlsx');
   }
+
+  // ── Handle file upload & parse ────────────────────────────────────────────
 
   function handleFileUpload(event: Event) {
     const file = (event.target as HTMLInputElement).files?.[0];
@@ -363,12 +353,7 @@
     reader.onload = (e) => {
       try {
         const data     = new Uint8Array(e.target?.result as ArrayBuffer);
-
-        // cellDates is intentionally omitted (defaults to false).
-        // xlsx returns date cells as raw serial numbers, which parseExcelDate()
-        // handles via UTC math — no timezone shift occurs.
         const workbook = XLSX.read(data, { type: 'array' });
-
         const sheet    = workbook.Sheets[workbook.SheetNames[0]];
         const rows     = XLSX.utils.sheet_to_json(sheet) as any[];
 
@@ -379,11 +364,10 @@
 
         importPreview = rows
           .map((row) => ({
+            // '#' column is intentionally ignored — it's just a row counter
             full_name:   row['Full Name']  || row['full_name']  || row['Name']    || row['name']    || '',
             address:     row['Address']    || row['address']    || '',
-            // ↓ FIX: use ?? instead of || so numeric 0 is not treated as falsy
             age:         row['Age'] ?? row['age'] ?? '',
-            // ↓ FIX: .toString() preserves leading zeros stripped by Excel
             contact:     (row['Contact'] ?? row['contact'] ?? row['Contact Number'] ?? '').toString(),
             received_at: parseExcelDate(
               row['Received At'] || row['received_at'] || row['Date Received'] || row['date'] || ''
@@ -392,7 +376,7 @@
           .filter((r) => r.full_name);
 
         if (importPreview.length === 0) {
-          importError = 'No valid records found. Make sure columns are: "Full Name", "Address", "Age", "Contact", "Received At".';
+          importError = 'No valid records found. Make sure columns match the template: "#", "Full Name", "Address", "Age", "Contact", "Received At".';
         }
       } catch {
         importError = 'Could not read file. Please upload a valid .xlsx or .xls file.';
@@ -401,8 +385,10 @@
     reader.readAsArrayBuffer(file);
   }
 
+  // ── Submit import ─────────────────────────────────────────────────────────
+
   async function submitImport() {
-    if (!importProgramId)         { importError = 'Please select a program'; return; }
+    if (!importProgramId)           { importError = 'Please select a program'; return; }
     if (importPreview.length === 0) { importError = 'No data to import'; return; }
 
     importLoading = true; importError = ''; importSuccess = '';
@@ -443,7 +429,7 @@
   }
 
   function fmtDate(d: string) {
-    return new Date(d).toLocaleDateString('en-PH', {
+    return new Date(d).toLocaleDateString('en-US', {
       month: 'short', day: 'numeric', year: 'numeric',
     });
   }
@@ -658,6 +644,13 @@
             <FileSpreadsheet size={16} class="text-blue-600" /> Import from Excel
           </h2>
           <button onclick={closeImport} class="text-gray-400 hover:text-gray-600 transition"><X size={18} /></button>
+        </div>
+
+        <!-- Note about template format -->
+        <div class="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-700">
+          <p class="font-semibold mb-1">Expected columns (in order):</p>
+          <p class="font-mono">#, Full Name, Address, Age, Contact, Received At</p>
+          <p class="mt-1 text-blue-500">Download the template below or use a previously exported file — they use the same format.</p>
         </div>
 
         {#if importSuccess}

@@ -13,7 +13,7 @@ router.get('/', authenticate, requireStaff, async (req, res) => {
     let sql = `
       SELECT b.*, p.title AS program_title, p.category,
              COALESCE(b.barangay, a.barangay) AS barangay,
-             a.age AS age
+             COALESCE(b.age, a.age) AS age
       FROM beneficiaries b
       LEFT JOIN programs p ON b.program_id = p.id
       LEFT JOIN applications a ON b.application_id = a.id
@@ -181,7 +181,7 @@ router.get('/:id/profile', authenticate, requireStaff, async (req, res) => {
     const beneficiary = await queryOne(`
       SELECT b.*, p.title AS program_title, p.category,
              COALESCE(b.barangay, a.barangay) AS barangay,
-             a.age AS age
+             COALESCE(b.age, a.age) AS age
       FROM beneficiaries b
       LEFT JOIN programs p ON b.program_id = p.id
       LEFT JOIN applications a ON b.application_id = a.id
@@ -246,16 +246,15 @@ router.post('/manual', authenticate, requireStaff, async (req, res) => {
       WHERE b.full_name LIKE ? AND b.address LIKE ?
     `, [`%${full_name}%`, `%${address}%`]);
 
-    // ✅ FIX: Direct insert — walang dummy application record na ginagawa.
-    // application_id = NULL (nullable sa schema, walang NOT NULL constraint).
     await run(
       `INSERT INTO beneficiaries
-         (application_id, program_id, full_name, address, contact, barangay, notes, received_at)
-       VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)`,
+         (application_id, program_id, full_name, address, age, contact, barangay, notes, received_at)
+       VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         program_id,
         full_name,
         address,
+        age ? parseInt(age) : null,
         contact,
         barangay    || null,
         notes       || null,
@@ -316,15 +315,15 @@ router.post('/bulk-import', authenticate, requireStaff, async (req, res) => {
         warnings.push(`${full_name} — has history in: ${history.map(h => h.program_title).join(', ')}`);
       }
 
-      // ✅ FIX: Direct insert — walang dummy application record na ginagawa.
       await run(
         `INSERT INTO beneficiaries
-           (application_id, program_id, full_name, address, contact, received_at)
-         VALUES (NULL, ?, ?, ?, ?, ?)`,
+           (application_id, program_id, full_name, address, age, contact, received_at)
+         VALUES (NULL, ?, ?, ?, ?, ?, ?)`,
         [
           program_id,
           full_name,
           address,
+          age ? parseInt(age) : null,
           contact,
           received_at || null,
         ]

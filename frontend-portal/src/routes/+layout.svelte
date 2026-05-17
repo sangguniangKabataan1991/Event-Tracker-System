@@ -32,9 +32,7 @@
                 
                 <!-- Left -->
                 <a href="/" class="group flex items-center gap-2.5">
-                    <div class="rounded-lg p-1.5 transition" style="background:rgba(255,255,255,0.10);">
-                        <img src="\logo.png" alt="Logo" class="h-6 w-6 object-contain" />
-                    </div>
+                    <img src="\logo.png" alt="Logo" class="h-10 w-10 object-contain" />
                     <div>
                         <div class="text-sm font-bold tracking-wide">SK Portal</div>
                         <div class="text-xs hidden sm:block" style="color:rgba(255,255,255,0.45);">
