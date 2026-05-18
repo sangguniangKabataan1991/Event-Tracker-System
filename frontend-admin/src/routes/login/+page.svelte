@@ -50,7 +50,7 @@
 
     <img src="/logo.png" alt="SK Logo" class="w-35 h-35 object-contain mb-3 opacity-95" />
     <h1 class="text-white text-base font-bold tracking-wide mb-0 text-center">
-      SK Beneficiary Management Portal
+      SK Beneficiary Tracking and Management Portal
     </h1>
     <p class="text-white/60 text-sm mb-4 text-center">
       Authorized Access Only

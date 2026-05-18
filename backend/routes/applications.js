@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import { query, queryOne, run } from '../db/database.js';
 import { authenticate, requireAdmin, requireStaff } from '../middleware/auth.js';
+import { sendApplicationApprovedEmail, sendApplicationRejectedEmail } from '../services/email.js';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -64,6 +65,8 @@ router.get('/program/:programId', authenticate, requireStaff, async (req, res) =
     const params = [req.params.programId];
     if (status) { sql += ' AND a.status = ?'; params.push(status); }
     if (search) { sql += ' AND (a.full_name LIKE ? OR a.address LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
+    if (from)   { sql += ' AND DATE(a.created_at) >= ?'; params.push(from); }
+    if (to)     { sql += ' AND DATE(a.created_at) <= ?'; params.push(to); }
     sql += ' ORDER BY a.created_at DESC';
     res.json(await query(sql, params));
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -116,7 +119,7 @@ router.post('/', authenticate, async (req, res) => {
 router.patch('/:id/status', authenticate, requireStaff, async (req, res) => {
   try {
     const { status, notes } = req.body;
-    if (!['approved','rejected','waitlist'].includes(status))
+    if (!['approved', 'rejected', 'waitlist', 'pending'].includes(status))
       return res.status(400).json({ error: 'Invalid status' });
 
     const app = await queryOne('SELECT * FROM applications WHERE id = ?', [req.params.id]);
@@ -126,6 +129,37 @@ router.patch('/:id/status', authenticate, requireStaff, async (req, res) => {
       'UPDATE applications SET status=?, notes=?, reviewed_by=?, reviewed_at=NOW() WHERE id=?',
       [status, notes || null, req.user.id, req.params.id]
     );
+
+    // ── Send email notification to applicant on approve / reject ──────────
+    if (app.applicant_id && (status === 'approved' || status === 'rejected')) {
+      try {
+        const applicant = await queryOne(
+          'SELECT email, full_name FROM users WHERE id = ?',
+          [app.applicant_id]
+        );
+        const program = await queryOne(
+          'SELECT title FROM programs WHERE id = ?',
+          [app.program_id]
+        );
+
+        if (applicant?.email && program) {
+          const payload = {
+            to:            applicant.email,
+            full_name:     applicant.full_name || app.full_name,
+            program_title: program.title,
+            notes:         notes || null,
+          };
+          if (status === 'approved') {
+            await sendApplicationApprovedEmail(payload);
+          } else {
+            await sendApplicationRejectedEmail(payload);
+          }
+        }
+      } catch (emailErr) {
+        // Never fail the request because of an email error — just log it
+        console.warn('[Email] Failed to send status notification:', emailErr.message);
+      }
+    }
 
     res.json({ message: `Application ${status}` });
   } catch (e) { res.status(500).json({ error: e.message }); }

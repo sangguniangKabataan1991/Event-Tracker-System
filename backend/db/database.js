@@ -3,24 +3,71 @@ import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
 import 'dotenv/config';
 
+// SSL only when explicitly enabled (e.g. production with a real cert)
+const sslConfig = process.env.DB_SSL === 'true'
+  ? { minVersion: 'TLSv1.2', rejectUnauthorized: true }
+  : false;
+
 const pool = mysql.createPool({
-  host:     process.env.DB_HOST     || 'localhost',
-  port:     parseInt(process.env.DB_PORT || '3306'),
-  user:     process.env.DB_USER     || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME     || 'sk_system',
+  host:               process.env.DB_HOST     || 'localhost',
+  port:               parseInt(process.env.DB_PORT || '3306'),
+  user:               process.env.DB_USER     || 'root',
+  password:           process.env.DB_PASSWORD || '',
+  database:           process.env.DB_NAME     || 'sk_system',
   waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  charset: 'utf8mb4',
-  ssl: {
-    minVersion: 'TLSv1.2',
-    rejectUnauthorized: true,
-  },
+  connectionLimit:    10,
+  queueLimit:         0,
+  charset:            'utf8mb4',
+
+  // Keep connections alive — prevents ECONNRESET on idle
+  enableKeepAlive:         true,
+  keepAliveInitialDelay:   0,
+
+  // Reconnect timeout
+  connectTimeout:          10000,
+
+  ssl: sslConfig,
 });
 
+// ── Connection error logging ───────────────────────────────────────────────
+pool.on('connection', (conn) => {
+  conn.on('error', (err) => {
+    console.error('[DB] Connection error:', err.code, err.message);
+  });
+});
+
+// ── Retry helper ───────────────────────────────────────────────────────────
+const RETRYABLE = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'PROTOCOL_CONNECTION_LOST',
+  'ETIMEDOUT',
+  'ER_CON_COUNT_ERROR',
+]);
+
+async function withRetry(fn, label = 'query', retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const isRetryable = RETRYABLE.has(err.code);
+      if (isRetryable && attempt < retries) {
+        const delay = 500 * attempt; // 500ms, 1000ms, 1500ms
+        console.warn(`[DB] ${label} failed (${err.code}), retrying in ${delay}ms… (${attempt}/${retries})`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw err; // non-retryable OR exhausted retries
+    }
+  }
+}
+
+// ── Public query helpers ───────────────────────────────────────────────────
 export async function query(sql, params = []) {
-  const [rows] = await pool.execute(sql, params);
+  const [rows] = await withRetry(
+    () => pool.execute(sql, params),
+    'query'
+  );
   return rows;
 }
 
@@ -30,14 +77,18 @@ export async function queryOne(sql, params = []) {
 }
 
 export async function run(sql, params = []) {
-  const [result] = await pool.execute(sql, params);
+  const [result] = await withRetry(
+    () => pool.execute(sql, params),
+    'run'
+  );
   return result;
 }
 
+// ── Database initializer ───────────────────────────────────────────────────
 export async function initDatabase() {
   console.log('Initializing MySQL database...');
 
-  // ── USERS ───────────────────────────────────────────────────────────────
+  // ── USERS ────────────────────────────────────────────────────────────────
   await pool.execute(`CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(100) UNIQUE NOT NULL,
@@ -52,13 +103,11 @@ export async function initDatabase() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
-  // ── Safe migrations (idempotent, run every startup) ──────────────────────
+  // ── Safe migrations (idempotent, run every startup) ───────────────────────
   const migrations = [
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS position VARCHAR(100) DEFAULT NULL AFTER role`,
     `ALTER TABLE users MODIFY COLUMN role ENUM('admin','staff','applicant') NOT NULL DEFAULT 'staff'`,
-    // ── Beneficiaries: add barangay column if not yet existing ──────────────
     `ALTER TABLE beneficiaries ADD COLUMN IF NOT EXISTS barangay VARCHAR(100) DEFAULT NULL`,
-    // ── Beneficiaries: add age column if not yet existing ───────────────────
     `ALTER TABLE beneficiaries ADD COLUMN IF NOT EXISTS age INT DEFAULT NULL`,
   ];
   for (const sql of migrations) {
@@ -68,7 +117,7 @@ export async function initDatabase() {
     await pool.execute(`ALTER TABLE users ADD UNIQUE INDEX idx_users_email (email)`);
   } catch (_) {}
 
-  // ── PASSWORD RESETS ──────────────────────────────────────────────────────
+  // ── PASSWORD RESETS ───────────────────────────────────────────────────────
   await pool.execute(`CREATE TABLE IF NOT EXISTS password_resets (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL UNIQUE,
@@ -78,7 +127,7 @@ export async function initDatabase() {
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
-  // ── CATEGORIES ──────────────────────────────────────────────────────────
+  // ── CATEGORIES ────────────────────────────────────────────────────────────
   await pool.execute(`CREATE TABLE IF NOT EXISTS program_categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) UNIQUE NOT NULL,
@@ -86,7 +135,7 @@ export async function initDatabase() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
-  // ── PROGRAMS ────────────────────────────────────────────────────────────
+  // ── PROGRAMS ──────────────────────────────────────────────────────────────
   await pool.execute(`CREATE TABLE IF NOT EXISTS programs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
@@ -104,7 +153,7 @@ export async function initDatabase() {
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
-  // ── APPLICATIONS ─────────────────────────────────────────────────────────
+  // ── APPLICATIONS ──────────────────────────────────────────────────────────
   await pool.execute(`CREATE TABLE IF NOT EXISTS applications (
     id INT AUTO_INCREMENT PRIMARY KEY,
     program_id INT NOT NULL,
@@ -138,7 +187,7 @@ export async function initDatabase() {
     FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
-  // ── BENEFICIARIES ────────────────────────────────────────────────────────
+  // ── BENEFICIARIES ─────────────────────────────────────────────────────────
   await pool.execute(`CREATE TABLE IF NOT EXISTS beneficiaries (
     id INT AUTO_INCREMENT PRIMARY KEY,
     application_id INT UNIQUE,
@@ -155,7 +204,7 @@ export async function initDatabase() {
     FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
-  // ── BARANGAY INFO ────────────────────────────────────────────────────────
+  // ── BARANGAY INFO ─────────────────────────────────────────────────────────
   await pool.execute(`CREATE TABLE IF NOT EXISTS barangay_info (
     id INT AUTO_INCREMENT PRIMARY KEY,
     barangay_name VARCHAR(200),
@@ -166,7 +215,7 @@ export async function initDatabase() {
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
-  // ── Default admin account ─────────────────────────────────────────────────
+  // ── Default admin account ──────────────────────────────────────────────────
   const admin = await queryOne("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
   if (!admin) {
     const hash = await bcrypt.hash('admin123', 10);
@@ -177,7 +226,7 @@ export async function initDatabase() {
     console.log('Default admin created: admin / admin123');
   }
 
-  // ── Default categories ────────────────────────────────────────────────────
+  // ── Default categories ─────────────────────────────────────────────────────
   const defaultCats = [
     'Educational Assistance', 'Medical Aid', 'Sports Program',
     'Livelihood', 'Relief Goods', 'Scholarship', 'Cultural Program', 'Social Services'

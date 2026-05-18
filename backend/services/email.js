@@ -11,8 +11,8 @@ const transporter = nodemailer.createTransport({
 });
 
 const FROM      = process.env.EMAIL_FROM || `SK System <${process.env.EMAIL_USER}>`;
-const ADMIN_URL = process.env.ADMIN_URL  || 'http://localhost:5173';  // admin portal
-const USER_URL  = process.env.USER_URL   || 'http://localhost:5174';  // user/applicant portal
+const ADMIN_URL = process.env.ADMIN_URL  || 'http://localhost:5173';
+const USER_URL  = process.env.USER_URL   || 'http://localhost:5174';
 
 // ── Shared HTML wrapper ────────────────────────────────────────────────────
 function htmlWrap(content) {
@@ -55,7 +55,6 @@ function htmlWrap(content) {
 }
 
 // ── Welcome email — sent when admin creates a new OFFICER account ──────────
-// Points to ADMIN portal login
 export async function sendWelcomeEmail({ to, full_name, username, password, position }) {
   const html = htmlWrap(`
     <p>Hello <strong>${full_name}</strong>,</p>
@@ -71,15 +70,15 @@ export async function sendWelcomeEmail({ to, full_name, username, password, posi
   `);
 
   await transporter.sendMail({
-    from:    FROM,
+    from: FROM,
     to,
     subject: ' Your SK Portal Account has been Created',
     html,
   });
 }
 
+// ── Password reset email ───────────────────────────────────────────────────
 export async function sendPasswordResetEmail({ to, full_name, token, role }) {
-  // admin and staff go to the ADMIN portal; applicants go to the USER portal
   const baseUrl  = (role === 'admin' || role === 'staff') ? ADMIN_URL : USER_URL;
   const resetUrl = `${baseUrl}/reset-password?token=${token}`;
 
@@ -99,9 +98,57 @@ export async function sendPasswordResetEmail({ to, full_name, token, role }) {
   `);
 
   await transporter.sendMail({
-    from:    FROM,
+    from: FROM,
     to,
     subject: 'SK Portal Password Reset Request',
+    html,
+  });
+}
+
+// ── Application approved notification ─────────────────────────────────────
+export async function sendApplicationApprovedEmail({ to, full_name, program_title, notes }) {
+  const html = htmlWrap(`
+    <p>Hello <strong>${full_name}</strong>,</p>
+    <p>Great news! Your application for the following SK program has been <strong style="color:#059669;">approved</strong>.</p>
+    <div class="info-box">
+      <p><strong>Program:</strong> ${program_title}</p>
+      ${notes ? `<p><strong>Notes from SK Staff:</strong> ${notes}</p>` : ''}
+    </div>
+    <p>Please visit the SK portal or contact your local SK office for the next steps.</p>
+    <a href="${USER_URL}/applications" class="btn">View My Applications</a>
+    <p style="color:#9CA3AF; font-size:12px;">
+      If you have questions, please reach out to your SK Barangay office directly.
+    </p>
+  `);
+
+  await transporter.sendMail({
+    from: FROM,
+    to,
+    subject: `✅ Application Approved — ${program_title}`,
+    html,
+  });
+}
+
+// ── Application rejected notification ─────────────────────────────────────
+export async function sendApplicationRejectedEmail({ to, full_name, program_title, notes }) {
+  const html = htmlWrap(`
+    <p>Hello <strong>${full_name}</strong>,</p>
+    <p>We regret to inform you that your application for the following SK program has been <strong style="color:#dc2626;">rejected</strong>.</p>
+    <div class="info-box">
+      <p><strong>Program:</strong> ${program_title}</p>
+      ${notes ? `<p><strong>Reason:</strong> ${notes}</p>` : '<p>No specific reason was provided.</p>'}
+    </div>
+    <p>You may contact your local SK office if you have questions or would like to re-apply in the future.</p>
+    <a href="${USER_URL}/applications" class="btn">View My Applications</a>
+    <p style="color:#9CA3AF; font-size:12px;">
+      Thank you for your interest in the SK Beneficiary program.
+    </p>
+  `);
+
+  await transporter.sendMail({
+    from: FROM,
+    to,
+    subject: `❌ Application Update — ${program_title}`,
     html,
   });
 }

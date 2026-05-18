@@ -44,19 +44,29 @@ app.use('/api/beneficiaries', beneficiaryRoutes);
 
 // ── CATEGORIES ─────────────────────────────────────────────────────────────
 app.get('/api/categories', async (req, res) => {
-  res.json(await query('SELECT * FROM program_categories ORDER BY name'));
+  try {
+    res.json(await query('SELECT * FROM program_categories ORDER BY name'));
+  } catch (e) {
+    console.error('[GET /api/categories]', e.message);
+    res.status(500).json({ error: 'Failed to fetch categories' });
+  }
 });
 
 app.post('/api/categories', async (req, res) => {
   try {
     const { name, description } = req.body;
+    if (!name?.trim())
+      return res.status(400).json({ error: 'Category name is required' });
     const result = await run(
       'INSERT INTO program_categories (name, description) VALUES (?,?)',
-      [name, description || null]
+      [name.trim(), description || null]
     );
     res.json({ id: result.insertId });
-  } catch {
-    res.status(400).json({ error: 'Category already exists' });
+  } catch (e) {
+    if (e.code === 'ER_DUP_ENTRY')
+      return res.status(400).json({ error: 'Category already exists' });
+    console.error('[POST /api/categories]', e.message);
+    res.status(500).json({ error: 'Failed to create category' });
   }
 });
 
@@ -68,17 +78,23 @@ app.delete('/api/categories/:name', async (req, res) => {
     );
     res.json({ message: 'Category deleted' });
   } catch (e) {
+    console.error('[DELETE /api/categories]', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
 // ── USERS ──────────────────────────────────────────────────────────────────
 app.get('/api/users', async (req, res) => {
-  res.json(
-    await query(
-      'SELECT id, username, full_name, role, position, email, contact, barangay, created_at FROM users ORDER BY created_at DESC'
-    )
-  );
+  try {
+    res.json(
+      await query(
+        'SELECT id, username, full_name, role, position, email, contact, barangay, created_at FROM users ORDER BY created_at DESC'
+      )
+    );
+  } catch (e) {
+    console.error('[GET /api/users]', e.message);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
 });
 
 app.post('/api/users', async (req, res) => {
@@ -108,7 +124,7 @@ app.post('/api/users', async (req, res) => {
         to:       email.trim(),
         full_name,
         username,
-        password,  // plaintext — user must change after first login
+        password,
         position:  position.trim(),
       }).catch(err => console.warn('  Welcome email failed:', err.message));
     }
@@ -117,11 +133,12 @@ app.post('/api/users', async (req, res) => {
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY')
       return res.status(400).json({ error: 'Username or email already taken' });
+    console.error('[POST /api/users]', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-// ── PUT /api/users/:id — updated with new token issuance ──────────────────
+// ── PUT /api/users/:id ──────────────────────────────────────────────────────
 app.put('/api/users/:id', async (req, res) => {
   try {
     const { full_name, username, position, password, email } = req.body;
@@ -145,7 +162,6 @@ app.put('/api/users/:id', async (req, res) => {
       );
     }
 
-    // Fetch the updated user record
     const updatedUser = await queryOne(
       'SELECT id, username, full_name, role, position, email FROM users WHERE id = ?',
       [req.params.id]
@@ -163,6 +179,7 @@ app.put('/api/users/:id', async (req, res) => {
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY')
       return res.status(400).json({ error: 'Username or email already in use by another account' });
+    console.error('[PUT /api/users/:id]', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -178,6 +195,7 @@ app.delete('/api/users/:id', async (req, res) => {
     await run('DELETE FROM users WHERE id = ?', [req.params.id]);
     res.json({ message: 'User deleted' });
   } catch (e) {
+    console.error('[DELETE /api/users/:id]', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -187,7 +205,8 @@ app.get('/api/barangay-info', async (req, res) => {
   try {
     const rows = await query('SELECT * FROM barangay_info LIMIT 1');
     res.json(rows[0] || {});
-  } catch {
+  } catch (e) {
+    console.error('[GET /api/barangay-info]', e.message);
     res.json({});
   }
 });
@@ -209,12 +228,33 @@ app.put('/api/barangay-info', async (req, res) => {
     }
     res.json({ message: 'Barangay information updated' });
   } catch (e) {
+    console.error('[PUT /api/barangay-info]', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
 // ── HEALTH ─────────────────────────────────────────────────────────────────
 app.get('/api/health', (_, res) => res.json({ status: 'OK', time: new Date().toISOString() }));
+
+// ── Global Express error handler (catches errors passed via next(err)) ──────
+app.use((err, req, res, next) => {
+  console.error('[Express Error]', err.message);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// ── Catch unhandled promise rejections ─────────────────────────────────────
+process.on('unhandledRejection', (reason) => {
+  console.error('[Unhandled Rejection]', reason?.message || reason);
+  // Log but do NOT crash — pool will recover automatically
+});
+
+// ── Catch uncaught exceptions (last resort) ────────────────────────────────
+process.on('uncaughtException', (err) => {
+  console.error('[Uncaught Exception]', err.code, err.message);
+  if (err.fatal) {
+    console.error('[DB] Fatal connection error — pool will attempt to recover.');
+  }
+});
 
 // ── START ──────────────────────────────────────────────────────────────────
 initDatabase()
