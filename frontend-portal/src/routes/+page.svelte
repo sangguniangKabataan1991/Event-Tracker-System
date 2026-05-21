@@ -170,12 +170,18 @@
 										</strong>
 									</span>
 								</div>
-
-								{#if program.requirements}
-									<div class="mt-2 text-xs text-slate-500">
-										<strong>Requirements:</strong> {program.requirements}
-									</div>
-								{/if}
+{#if program.requirements}
+    <div class="mt-2 text-xs text-slate-500">
+        <strong>Requirements:</strong>
+        <ul class="mt-1 space-y-0.5 list-none">
+            {#each program.requirements.split('\n').filter(r => r.trim()) as req}
+                <li class="flex items-start gap-1.5">
+                    <span>{req.trim()}</span>
+                </li>
+            {/each}
+        </ul>
+    </div>
+{/if}
 							</div>
 
 							<div class="shrink-0">

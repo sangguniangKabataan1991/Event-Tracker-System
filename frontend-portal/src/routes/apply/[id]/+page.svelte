@@ -103,11 +103,6 @@
 		if (!form.age)               { error = 'Age is required.'; return; }
 		if (!form.contact.trim())    { error = 'Contact number is required.'; return; }
 
-		if (!form.requirements_submitted.trim() && attachedFiles.length === 0) {
-			error = 'Please provide requirements — enter text or attach at least one file.';
-			return;
-		}
-
 		showConfirm = true;
 	}
 
@@ -277,68 +272,51 @@
 				</div>
 
 				<div>
-					<label class="label" for="req">Requirements *</label>
+					<!-- File upload -->
+					<label class="block">
+						<span class="label">Submit Requirements</span>
+						<input
+							type="file"
+							multiple
+							accept="image/*,.pdf"
+							class="block w-full text-sm text-slate-500
+								file:mr-3 file:py-2 file:px-4
+								file:rounded-lg file:border file:border-slate-300
+								file:text-sm file:font-medium
+								file:bg-white file:text-slate-700
+								hover:file:bg-slate-50
+								cursor-pointer border border-slate-200 rounded-lg
+								focus:outline-none"
+							onchange={handleFileChange}
+						/>
+						<p class="mt-1 text-xs text-slate-400">PNG, JPG, PDF · max 10MB each</p>
+					</label>
 
-					<div
-						class="overflow-hidden rounded-lg border transition focus-within:border-slate-400"
-						class:border-slate-200={!error || requirementsValid}
-						class:border-red-300={!!error && !requirementsValid}
-					>
-						<!-- Text area for listing requirements -->
-						<textarea
-							id="req"
-							bind:value={form.requirements_submitted}
-							rows={3}
-							class="w-full resize-none border-none px-3 py-2.5 text-sm text-slate-800 outline-none placeholder:text-slate-400"
-						></textarea>
-
-						<div class="border-t border-slate-100"></div>
-
-						{#if attachedFiles.length > 0}
-							<ul class="flex flex-col gap-1 px-3 py-2">
-								{#each attachedFiles as file, i}
-									<li
-										class="flex items-center justify-between rounded-md bg-slate-50 px-2.5 py-1.5"
+					<!-- Attached files list -->
+					{#if attachedFiles.length > 0}
+						<ul class="mt-2 flex flex-col gap-1.5">
+							{#each attachedFiles as file, i}
+								<li class="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+									<div class="flex min-w-0 items-center gap-2">
+										{#if isImage(file)}
+											<ImageIcon size={13} class="shrink-0 text-slate-400" />
+										{:else}
+											<FileText size={13} class="shrink-0 text-slate-400" />
+										{/if}
+										<span class="truncate text-xs text-slate-700">{file.name}</span>
+										<span class="shrink-0 text-xs text-slate-400">{formatFileSize(file.size)}</span>
+									</div>
+									<button
+										type="button"
+										onclick={() => removeFile(i)}
+										class="ml-2 shrink-0 rounded p-0.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"
 									>
-										<div class="flex min-w-0 items-center gap-2">
-											{#if isImage(file)}
-												<ImageIcon size={13} class="shrink-0 text-slate-400" />
-											{:else}
-												<FileText size={13} class="shrink-0 text-slate-400" />
-											{/if}
-											<span class="truncate text-xs text-slate-700">{file.name}</span>
-											<span class="shrink-0 text-xs text-slate-400">{formatFileSize(file.size)}</span>
-										</div>
-										<button
-											type="button"
-											onclick={() => removeFile(i)}
-											class="ml-2 shrink-0 rounded p-0.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"
-										>
-											<X size={12} />
-										</button>
-									</li>
-								{/each}
-							</ul>
-							<div class="border-t border-slate-100"></div>
-						{/if}
-
-						<div class="flex items-center px-3 py-2">
-							<label
-								class="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400 transition hover:text-slate-600"
-							>
-								<Paperclip size={13} />
-								Attach file or image
-								<input
-									type="file"
-									multiple
-									accept="image/*,.pdf"
-									class="hidden"
-									onchange={handleFileChange}
-								/>
-							</label>
-							<span class="ml-auto text-xs text-slate-300">PNG, JPG, PDF · max 10MB each</span>
-						</div>
-					</div>
+										<X size={12} />
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
 				</div>
 
 				<!-- Error message -->

@@ -31,17 +31,20 @@ router.post('/login', async (req, res) => {
       full_name: user.full_name,
     });
 
-    res.json({
-      token,
-      user: {
-        id:        user.id,
-        username:  user.username,
-        role:      user.role,
-        position:  user.position,
-        full_name: user.full_name,
-        email:     user.email,
-      },
-    });
+  res.json({
+    token,
+    user: {
+      id:        user.id,
+      username:  user.username,
+      role:      user.role,
+      position:  user.position,
+      full_name: user.full_name,
+      email:     user.email,
+      contact:   user.contact  || null,
+      barangay:  user.barangay || null,
+      address:   user.address  || null,
+    },
+  });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -72,7 +75,10 @@ router.post('/register', async (req, res) => {
         role:      'applicant',
         position:  null,
         full_name,
-        email:     email || null,
+        email:     email    || null,
+        contact:   contact  || null,
+        barangay:  barangay || null,
+        address:   address  || null,
       },
     });
   } catch (e) {
