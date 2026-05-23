@@ -1,12 +1,24 @@
 import { Router } from 'express';
 import { query, queryOne, run } from '../db/database.js';
-import { authenticate, requireAdmin } from '../middleware/auth.js';
+import { authenticate, requireAdmin, requireStaff } from '../middleware/auth.js';
 
 const router = Router();
 
 router.get('/', async (req, res) => {
   try {
     const { status, category } = req.query;
+
+    await run(`
+      UPDATE programs
+      SET status = 'closed'
+      WHERE status = 'open'
+        AND (
+          (end_date IS NOT NULL AND DATE(end_date) < CURDATE())
+          OR
+          (slots > 0 AND slots_used >= slots)
+        )
+    `);
+
     let sql = `SELECT p.*, u.full_name as created_by_name,
       (SELECT COUNT(*) FROM applications WHERE program_id = p.id AND status = 'pending') as pending_count,
       (SELECT COUNT(*) FROM applications WHERE program_id = p.id AND status = 'approved') as approved_count,
@@ -22,6 +34,18 @@ router.get('/', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
   try {
+    await run(`
+      UPDATE programs
+      SET status = 'closed'
+      WHERE id = ?
+        AND status = 'open'
+        AND (
+          (end_date IS NOT NULL AND DATE(end_date) < CURDATE())
+          OR
+          (slots > 0 AND slots_used >= slots)
+        )
+    `, [req.params.id]);
+
     const p = await queryOne(
       `SELECT p.*, u.full_name as created_by_name FROM programs p
        LEFT JOIN users u ON p.created_by = u.id WHERE p.id = ?`,
@@ -32,7 +56,7 @@ router.get('/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.post('/', authenticate, requireAdmin, async (req, res) => {
+router.post('/', authenticate, requireStaff, async (req, res) => {
   try {
     const { title, description, category, slots, requirements, start_date, end_date } = req.body;
     if (!title || !category || !slots) return res.status(400).json({ error: 'Title, category, and slots required' });
@@ -44,7 +68,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.put('/:id', authenticate, requireAdmin, async (req, res) => {
+router.put('/:id', authenticate, requireStaff, async (req, res) => {
   try {
     const { title, description, category, slots, requirements, start_date, end_date, status } = req.body;
     await run(
@@ -56,7 +80,7 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.patch('/:id/status', authenticate, requireAdmin, async (req, res) => {
+router.patch('/:id/status', authenticate, requireStaff, async (req, res) => {
   try {
     const { status } = req.body;
     if (!['draft', 'open', 'closed', 'completed'].includes(status))
@@ -66,7 +90,7 @@ router.patch('/:id/status', authenticate, requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.post('/:id/duplicate', authenticate, requireAdmin, async (req, res) => {
+router.post('/:id/duplicate', authenticate, requireStaff, async (req, res) => {
   try {
     const original = await queryOne('SELECT * FROM programs WHERE id = ?', [req.params.id]);
     if (!original) return res.status(404).json({ error: 'Program not found' });
@@ -90,7 +114,7 @@ router.post('/:id/duplicate', authenticate, requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+router.delete('/:id', authenticate, requireStaff, async (req, res) => {
   try {
     await run('DELETE FROM programs WHERE id=?', [req.params.id]);
     res.json({ message: 'Program deleted' });

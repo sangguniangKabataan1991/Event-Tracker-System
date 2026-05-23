@@ -1,6 +1,6 @@
 import { writable, get } from 'svelte/store';
 
-/** @typedef {{ id: number, full_name: string, email: string, role: string, contact?: string, barangay?: string, address?: string }} UserData */
+/** @typedef {{ id: number, username: string, full_name: string, email: string, role: string, contact?: string, barangay?: string, address?: string, avatar_url?: string | null }} UserData */
 
 /** @type {import('svelte/store').Writable<UserData | null>} */
 export const user = writable(null);
@@ -33,6 +33,18 @@ export function logout() {
   localStorage.removeItem('sk_portal_user');
 }
 
+/**
+ * @param {Partial<UserData>} patch
+ */
+export function updateUser(patch) {
+  user.update((u) => {
+    if (!u) return u;
+    const updated = { ...u, ...patch };
+    localStorage.setItem('sk_portal_user', JSON.stringify(updated));
+    return updated;
+  });
+}
+
 export const API = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 /**
@@ -52,7 +64,6 @@ export async function apiFetch(path, options = {}) {
     body: options.body ? JSON.stringify(options.body) : undefined
   });
 
-  // Auto-logout kapag expired/invalid token
   if (res.status === 401) {
     logout();
     window.location.href = '/login';

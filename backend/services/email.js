@@ -148,7 +148,7 @@ export async function sendApplicationRejectedEmail({ to, full_name, program_titl
   await transporter.sendMail({
     from: FROM,
     to,
-    subject: `❌ Application Update — ${program_title}`,
+    subject: ` Application Update — ${program_title}`,
     html,
   });
 }

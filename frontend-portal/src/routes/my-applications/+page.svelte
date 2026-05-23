@@ -120,12 +120,6 @@
 		waitlist: 'bg-slate-100 text-slate-600 border border-slate-200',
 	};
 
-	const statusLabel: Record<AppStatus, string> = {
-		pending:  'Awaiting review',
-		approved: 'You are a beneficiary!',
-		rejected: 'Application not accepted',
-		waitlist: 'Waiting for an available slot',
-	};
 </script>
 
 <div class="space-y-5">
@@ -256,9 +250,6 @@
 								{/if}
 								{app.status.charAt(0).toUpperCase() + app.status.slice(1)}
 							</span>
-							<p class="mt-1.5 max-w-32 text-xs leading-tight text-slate-400">
-								{statusLabel[app.status]}
-							</p>
 						</div>
 					</div>
 				</div>

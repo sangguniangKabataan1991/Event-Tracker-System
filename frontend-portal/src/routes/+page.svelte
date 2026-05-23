@@ -6,6 +6,7 @@
 		Inbox,
 		CircleCheck,
 		CircleAlert,
+		CircleX,
 		UserPlus,
 		LogIn,
 		Users,
@@ -20,6 +21,7 @@
 		description?: string;
 		slots: number;
 		slots_used: number;
+		status: string;
 		start_date?: string;
 		end_date?: string;
 		requirements?: string;
@@ -33,7 +35,8 @@
 
 	onMount(async () => {
 		try {
-			programs = await apiFetch('/programs?status=open');
+			// Fetch lahat ng programs, hindi lang open
+			programs = await apiFetch('/programs');
 
 			if ($user) {
 				const myApplications = await apiFetch('/applications/my');
@@ -49,6 +52,11 @@
 	function hasApplied(programId: number) {
 		return appliedPrograms.includes(programId);
 	}
+
+	// Ipakita lang ang open at closed na programs, hindi draft
+	let visiblePrograms = $derived(
+		programs.filter(p => p.status === 'open' || p.status === 'closed' || p.status === 'completed')
+	);
 </script>
 
 <div class="space-y-6">
@@ -109,7 +117,7 @@
 				<CircleAlert class="h-4 w-4 shrink-0" />
 				{error}
 			</div>
-		{:else if programs.length === 0}
+		{:else if visiblePrograms.length === 0}
 			<div class="rounded-2xl border border-slate-200 bg-white py-16 text-center shadow-sm">
 				<Inbox class="mx-auto mb-3 h-10 w-10 text-slate-300" />
 				<p class="font-medium text-slate-500">No available programs at the moment.</p>
@@ -117,20 +125,30 @@
 			</div>
 		{:else}
 			<div class="grid gap-4">
-				{#each programs as program}
+				{#each visiblePrograms as program}
 					<div
-						class="rounded-2xl border border-slate-200 bg-white p-5 transition-all hover:shadow-md"
+						class="rounded-2xl border bg-white p-5 transition-all hover:shadow-md
+							{program.status !== 'open' ? 'border-slate-200 opacity-80' : 'border-slate-200'}"
 					>
 						<div class="flex items-start justify-between gap-4">
 							<div class="min-w-0 flex-1">
 								<div class="mb-1 flex flex-wrap items-center gap-2">
 									<h3 class="font-semibold text-slate-900">{program.title}</h3>
 
-									<span
-										class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"
-									>
-										<CircleCheck class="h-3 w-3" /> Open
-									</span>
+									<!-- Status badge -->
+									{#if program.status === 'open'}
+										<span class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+											<CircleCheck class="h-3 w-3" /> Open
+										</span>
+									{:else if program.status === 'closed'}
+										<span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+											<CircleX class="h-3 w-3" /> Closed
+										</span>
+									{:else if program.status === 'completed'}
+										<span class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+											<CircleCheck class="h-3 w-3" /> Completed
+										</span>
+									{/if}
 
 									<span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
 										{program.category}
@@ -150,38 +168,52 @@
 										</strong>
 									</span>
 
-									<span class="flex items-center gap-1">
-										<CalendarDays class="h-3.5 w-3.5" />
-										Start:
-										<strong class="ml-0.5 text-slate-700">
-											{program.start_date
-												? new Date(program.start_date).toLocaleDateString()
-												: 'N/A'}
-										</strong>
-									</span>
+									{#if program.start_date}
+										<span class="flex items-center gap-1">
+											<CalendarDays class="h-3.5 w-3.5" />
+											Start:
+											<strong class="ml-0.5 text-slate-700">
+												{new Date(program.start_date).toLocaleDateString()}
+											</strong>
+										</span>
+									{/if}
 
-									<span class="flex items-center gap-1">
-										<CalendarDays class="h-3.5 w-3.5" />
-										End:
-										<strong class="ml-0.5 text-slate-700">
-											{program.end_date
-												? new Date(program.end_date).toLocaleDateString()
-												: 'N/A'}
-										</strong>
-									</span>
+									{#if program.end_date}
+										<span class="flex items-center gap-1">
+											<CalendarDays class="h-3.5 w-3.5" />
+											End:
+											<strong class="ml-0.5 text-slate-700">
+												{new Date(program.end_date).toLocaleDateString()}
+											</strong>
+										</span>
+									{/if}
 								</div>
-{#if program.requirements}
-    <div class="mt-2 text-xs text-slate-500">
-        <strong>Requirements:</strong>
-        <ul class="mt-1 space-y-0.5 list-none">
-            {#each program.requirements.split('\n').filter(r => r.trim()) as req}
-                <li class="flex items-start gap-1.5">
-                    <span>{req.trim()}</span>
-                </li>
-            {/each}
-        </ul>
-    </div>
-{/if}
+
+								{#if program.requirements}
+									<div class="mt-2 text-xs text-slate-500">
+										<strong>Requirements:</strong>
+										<ul class="mt-1 space-y-0.5 list-none">
+											{#each program.requirements.split('\n').filter(r => r.trim()) as req}
+												<li class="flex items-start gap-1.5">
+													<span>{req.trim()}</span>
+												</li>
+											{/each}
+										</ul>
+									</div>
+								{/if}
+
+								<!-- Closed/full notice -->
+								{#if program.status === 'closed'}
+									<div class="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+										{program.slots_used >= program.slots
+											? 'Slots are full for this program.'
+											: 'This program is currently closed.'}
+									</div>
+								{:else if program.status === 'completed'}
+									<div class="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-600">
+										This program has been completed.
+									</div>
+								{/if}
 							</div>
 
 							<div class="shrink-0">
@@ -193,10 +225,12 @@
 										>
 											Applied
 										</button>
+									{:else if program.status !== 'open'}
+										<span class="block rounded-lg bg-slate-100 px-3 py-2 text-center text-xs text-slate-400">
+											{program.status === 'completed' ? 'Completed' : 'Closed'}
+										</span>
 									{:else if program.slots_used >= program.slots}
-										<span
-											class="block rounded-lg bg-slate-100 px-3 py-2 text-center text-xs text-slate-400"
-										>
+										<span class="block rounded-lg bg-slate-100 px-3 py-2 text-center text-xs text-slate-400">
 											Slots Full
 										</span>
 									{:else}

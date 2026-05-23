@@ -23,7 +23,7 @@
   import KeyRound      from 'lucide-svelte/icons/key-round';
 
   interface Category   { name: string; }
-  interface UserRow    { id: number; full_name: string; username: string; role: string; position: string | null; email: string | null; }
+  interface UserRow    { id: number; full_name: string; username: string; role: string; position: string | null; email: string | null;  avatar_url?: string | null; }
   interface UserForm   { full_name: string; username: string; password: string; position: string; email: string; }
   interface BarangayInfo {
     barangay_name: string; sk_chairperson: string;
@@ -458,9 +458,13 @@
         </div>
 
         <div class="bg-gray-50 rounded-xl px-4 py-3 mb-5 flex items-center gap-3">
-          <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
-               style="background:#0A1F44;">
-            {deletingUser.full_name.charAt(0)}
+          <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 overflow-hidden"
+              style="background:#0A1F44;">
+            {#if deletingUser.avatar_url}
+              <img src={deletingUser.avatar_url} alt={deletingUser.full_name} class="w-full h-full object-cover" />
+            {:else}
+              {deletingUser.full_name.charAt(0)}
+            {/if}
           </div>
           <div class="min-w-0">
             <div class="text-sm font-semibold text-gray-900 truncate">{deletingUser.full_name}</div>
@@ -553,7 +557,7 @@
               </button>
             </div>
             {#if usingCustomPos}
-              <input bind:value={customPosition} class="input" placeholder="e.g. SK Youth Rep, SK Committee Head..." />
+              <input bind:value={customPosition} class="input" />
             {/if}
             {#if !usingCustomPos && userForm.position}
               <div class="mt-2 flex items-center gap-1.5 text-xs text-[#0A1F44] font-medium">
@@ -826,10 +830,15 @@
       <div class="space-y-2">
         {#each users.filter(u => u.role !== 'applicant') as u (u.id)}
           <div class="flex items-center gap-3 p-2.5 rounded-xl bg-gray-50 hover:bg-[#0A1F44]/5 transition">
+            
             <!-- Avatar -->
-            <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
-                 style="background:#0A1F44;">
-              {u.full_name?.charAt(0)}
+            <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 overflow-hidden"
+                style="background:#0A1F44;">
+              {#if u.avatar_url}
+                <img src={u.avatar_url} alt={u.full_name} class="w-full h-full object-cover" />
+              {:else}
+                {u.full_name?.charAt(0)}
+              {/if}
             </div>
 
             <!-- Info -->

@@ -19,6 +19,7 @@
     program_title: string;
     created_at: string;
     status: string;
+    applicant_avatar_url?: string | null;
   }
 
   interface Stats {
@@ -34,6 +35,7 @@
     full_name: string;
     address: string;
     program_count: number;
+    avatar_url?: string | null;
   }
 
   interface ProgramStat {
@@ -52,6 +54,7 @@
     full_name: string;
     username: string;
     created_at: string;
+    avatar_url?: string | null;
   }
 
   interface ProgramGroup {
@@ -158,7 +161,6 @@
   {:else if stats}
 
     <!-- ── Summary Cards ── -->
-    <!-- Mobile: 2 cols, md: 3 cols, lg: 5 cols -->
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
 
       <!-- Total Programs -->
@@ -198,7 +200,6 @@
           </div>
         </button>
         {#if showPendingDropdown}
-          <!-- Dropdown: on mobile use full-width positioning -->
           <div class="absolute top-full left-0 mt-1 z-30 bg-white border border-slate-200 rounded-xl shadow-lg w-64 sm:w-72 max-h-64 overflow-y-auto">
             <div class="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
               <span class="text-xs font-semibold text-slate-600">Pending Applicants</span>
@@ -208,9 +209,18 @@
               <p class="text-xs text-slate-400 px-3 py-4 text-center">No pending applications</p>
             {:else}
               {#each recentPending as app}
-                <div class="px-3 py-2 border-b border-slate-50 hover:bg-amber-50 transition-colors">
-                  <div class="text-xs font-medium text-slate-800">{app.full_name}</div>
-                  <div class="text-xs text-slate-400 truncate">{app.program_title}</div>
+                <div class="flex items-center gap-2.5 px-3 py-2 border-b border-slate-50 hover:bg-amber-50 transition-colors">
+                  <div class="w-6 h-6 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-[10px] font-bold shrink-0 overflow-hidden">
+                    {#if app.applicant_avatar_url}
+                      <img src={app.applicant_avatar_url} alt={app.full_name} class="w-full h-full object-cover" />
+                    {:else}
+                      {app.full_name.charAt(0)}
+                    {/if}
+                  </div>
+                  <div class="min-w-0">
+                    <div class="text-xs font-medium text-slate-800">{app.full_name}</div>
+                    <div class="text-xs text-slate-400 truncate">{app.program_title}</div>
+                  </div>
                 </div>
               {/each}
             {/if}
@@ -253,9 +263,18 @@
               <p class="text-xs text-slate-400 px-3 py-4 text-center">No rejected applications</p>
             {:else}
               {#each rejectedApps as app}
-                <div class="px-3 py-2 border-b border-slate-50 hover:bg-red-50 transition-colors">
-                  <div class="text-xs font-medium text-slate-800">{app.full_name}</div>
-                  <div class="text-xs text-slate-400 truncate">{app.program_title}</div>
+                <div class="flex items-center gap-2.5 px-3 py-2 border-b border-slate-50 hover:bg-red-50 transition-colors">
+                  <div class="w-6 h-6 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-[10px] font-bold shrink-0 overflow-hidden">
+                    {#if app.applicant_avatar_url}
+                      <img src={app.applicant_avatar_url} alt={app.full_name} class="w-full h-full object-cover" />
+                    {:else}
+                      {app.full_name.charAt(0)}
+                    {/if}
+                  </div>
+                  <div class="min-w-0">
+                    <div class="text-xs font-medium text-slate-800">{app.full_name}</div>
+                    <div class="text-xs text-slate-400 truncate">{app.program_title}</div>
+                  </div>
                 </div>
               {/each}
             {/if}
@@ -265,10 +284,10 @@
 
     </div>
 
-    <!-- ── Main Grid: stacks on mobile, 3-col on lg ── -->
+    <!-- ── Main Grid ── -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
 
-      <!-- Recent Pending — full width on mobile, 2-col on lg -->
+      <!-- Recent Pending -->
       <div class="card lg:col-span-2">
         <div class="flex items-center justify-between mb-3 sm:mb-4">
           <h2 class="font-semibold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
@@ -306,8 +325,15 @@
                 {#if group.expanded}
                   <div class="divide-y divide-slate-50">
                     {#each group.applicants as app}
-                      <div class="flex items-center justify-between px-4 py-2">
-                        <span class="text-sm text-slate-700 truncate flex-1 mr-2">{app.full_name}</span>
+                      <div class="flex items-center gap-3 px-4 py-2">
+                        <div class="w-6 h-6 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-[10px] font-bold shrink-0 overflow-hidden">
+                          {#if app.applicant_avatar_url}
+                            <img src={app.applicant_avatar_url} alt={app.full_name} class="w-full h-full object-cover" />
+                          {:else}
+                            {app.full_name.charAt(0)}
+                          {/if}
+                        </div>
+                        <span class="text-sm text-slate-700 truncate flex-1">{app.full_name}</span>
                         <span class="text-xs text-slate-400 whitespace-nowrap shrink-0">{fmtDate(app.created_at)}</span>
                       </div>
                     {/each}
@@ -334,12 +360,16 @@
                 class="flex items-center gap-2.5 no-underline rounded-md -mx-1 px-1 py-1.5
                        hover:bg-gray-50 transition-colors cursor-pointer"
               >
-                <span
-                  class="text-xs font-bold w-5 text-center rounded-full py-0.5 shrink-0"
-                  style="background:{i===0?'#0A1F44':i===1?'#374151':'#9CA3AF'}; color:white;"
+                <div
+                  class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden"
+                  style="background:{i===0?'#0A1F44':i===1?'#374151':'#9CA3AF'};"
                 >
-                  {i + 1}
-                </span>
+                  {#if r.avatar_url}
+                    <img src={r.avatar_url} alt={r.full_name} class="w-full h-full object-cover" />
+                  {:else}
+                    {r.full_name.charAt(0)}
+                  {/if}
+                </div>
                 <div class="flex-1 min-w-0">
                   <div class="text-sm font-medium truncate text-gray-800">{r.full_name}</div>
                   <div class="text-xs text-gray-400 truncate">{r.address}</div>
@@ -355,7 +385,7 @@
       </div>
     </div>
 
-    <!-- ── Second Row: stacks on mobile ── -->
+    <!-- ── Second Row ── -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
 
       <!-- Programs Nearly Full -->
@@ -419,10 +449,14 @@
             {#each recentUsers as u}
               <div class="flex items-center gap-2.5">
                 <div
-                  class="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                  class="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden"
                   style="background:#0A1F44;"
                 >
-                  {u.full_name.charAt(0)}
+                  {#if u.avatar_url}
+                    <img src={u.avatar_url} alt={u.full_name} class="w-full h-full object-cover" />
+                  {:else}
+                    {u.full_name.charAt(0)}
+                  {/if}
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="text-sm font-medium truncate">{u.full_name}</div>
@@ -446,7 +480,16 @@
           <div class="space-y-2.5">
             {#each recentApproved as app}
               <div class="flex items-center gap-2.5">
-                <div class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
+                <div
+                  class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden"
+                  style="background:#0A1F44;"
+                >
+                  {#if app.applicant_avatar_url}
+                    <img src={app.applicant_avatar_url} alt={app.full_name} class="w-full h-full object-cover" />
+                  {:else}
+                    {app.full_name.charAt(0)}
+                  {/if}
+                </div>
                 <div class="flex-1 min-w-0">
                   <div class="text-sm font-medium truncate">{app.full_name}</div>
                   <div class="text-xs text-gray-400 truncate">{app.program_title}</div>

@@ -104,9 +104,8 @@
         cutout: '62%',
         plugins: {
           legend: {
-            position: 'bottom',
-            labels: { font: { size: 12 }, padding: 16, usePointStyle: true, pointStyleWidth: 10 },
-          },
+  display: false,
+},
           tooltip: {
             callbacks: {
               label: (ctx) => {
@@ -294,26 +293,40 @@
           <p class="text-sm">No beneficiary data for {selectedYear}</p>
         </div>
       {:else}
-        <div class="flex items-end gap-1.5 h-36 mb-2">
-          {#each monthGrid as m}
-            <div class="flex-1 flex flex-col items-center gap-1">
-              <div class="w-full flex flex-col justify-end" style="height: 120px;">
-                {#if m.count > 0}
-                  <div
-                    class="w-full rounded-t-md transition-all duration-300 relative group cursor-default"
-                    style="height: {Math.max(4, Math.round(m.count / maxMonthCount * 100))}%; background:#0A1F44;">
-                    <div class="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] px-2 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition z-10">
-                      {m.count} beneficiar{m.count === 1 ? 'y' : 'ies'}
-                    </div>
-                  </div>
-                {:else}
-                  <div class="w-full rounded-t-md bg-gray-100" style="height: 4px;"></div>
-                {/if}
-              </div>
-              <span class="text-[10px] text-gray-400">{m.name}</span>
-            </div>
-          {/each}
+      <div class="flex gap-2">
+        <!-- Y-axis labels -->
+        <div class="flex flex-col justify-between text-[10px] text-gray-400 text-right pb-5" style="height: 136px;">
+          <span>{maxMonthCount}</span>
+          <span>{Math.round(maxMonthCount * 0.75)}</span>
+          <span>{Math.round(maxMonthCount * 0.5)}</span>
+          <span>{Math.round(maxMonthCount * 0.25)}</span>
+          <span>0</span>
         </div>
+
+        <!-- Bars -->
+        <div class="flex-1">
+          <div class="flex items-end gap-1.5 h-36 mb-2">
+            {#each monthGrid as m}
+              <div class="flex-1 flex flex-col items-center gap-1">
+                <div class="w-full flex flex-col justify-end" style="height: 120px;">
+                  {#if m.count > 0}
+                    <div
+                      class="w-full rounded-t-md transition-all duration-300 relative group cursor-default"
+                      style="height: {Math.max(4, Math.round(m.count / maxMonthCount * 100))}%; background:#0A1F44;">
+                      <div class="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] px-2 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition z-10">
+                        {m.count} beneficiar{m.count === 1 ? 'y' : 'ies'}
+                      </div>
+                    </div>
+                  {:else}
+                    <div class="w-full rounded-t-md bg-gray-100" style="height: 4px;"></div>
+                  {/if}
+                </div>
+                <span class="text-[10px] text-gray-400">{m.name}</span>
+              </div>
+            {/each}
+          </div>
+        </div>
+      </div>
 
         <div class="overflow-x-auto mt-4">
           <table class="w-full text-sm">
@@ -422,8 +435,24 @@
               Total: <strong class="text-gray-700">{categoryTotals.reduce((a, c) => a + c.count, 0)}</strong> beneficiar{categoryTotals.reduce((a, c) => a + c.count, 0) === 1 ? 'y' : 'ies'}
             </span>
           </div>
-          <div class="flex items-center justify-center" style="max-height: 260px;">
-            <canvas bind:this={pieCanvas} style="max-height: 250px; max-width: 100%;"></canvas>
+<div class="flex items-center justify-center gap-6">
+            <!-- Chart - centered -->
+            <div class="shrink-0" style="width: 160px; height: 160px;">
+              <canvas bind:this={pieCanvas} style="width:160px; height:160px;"></canvas>
+            </div>
+            <!-- Legend -->
+            <div class="space-y-2 min-w-0">
+              {#each categoryTotals as c}
+                {@const total = categoryTotals.reduce((a, x) => a + x.count, 0)}
+                {@const pct = total > 0 ? Math.round(c.count / total * 100) : 0}
+                <div class="flex items-center gap-3">
+                  <span class="h-3 w-3 rounded-sm shrink-0" style="background:{c.color};"></span>
+                  <span class="text-xs text-gray-700 w-28 truncate">{c.label}</span>
+                  <span class="text-xs font-semibold text-gray-800 w-6 text-right">{c.count}</span>
+                  <span class="text-xs text-gray-400 w-8 text-right">{pct}%</span>
+                </div>
+              {/each}
+            </div>
           </div>
         {/if}
       </div>
@@ -454,7 +483,7 @@
       </div>
 
       <!-- Repeat Beneficiaries -->
-      <div class="card lg:col-span-2">
+      <div class="card">
         <div class="flex items-center justify-between mb-4">
           <h2 class="font-semibold text-gray-800 flex items-center gap-2">
             <AlertTriangle size={16} class="text-orange-500" /> Repeat Benefit Recipients

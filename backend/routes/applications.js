@@ -31,10 +31,12 @@ router.get('/', authenticate, requireStaff, async (req, res) => {
   try {
     const { status, search, from, to } = req.query;
     let sql = `SELECT a.*, p.title as program_title,
+                 u.avatar_url as applicant_avatar_url,
                  (SELECT COUNT(*) FROM application_requirements ar WHERE ar.application_id = a.id) as file_count,
                  (SELECT id FROM beneficiaries b WHERE b.application_id = a.id LIMIT 1) as beneficiary_id
                FROM applications a
                LEFT JOIN programs p ON a.program_id = p.id
+               LEFT JOIN users u ON a.applicant_id = u.id
                WHERE 1=1`;
     const params = [];
 
@@ -56,6 +58,7 @@ router.get('/program/:programId', authenticate, requireStaff, async (req, res) =
   try {
     const { status, search, from, to } = req.query;
     let sql = `SELECT a.*, u.username, p.title as program_title,
+                 u.avatar_url as applicant_avatar_url,
                  (SELECT COUNT(*) FROM application_requirements ar WHERE ar.application_id = a.id) as file_count,
                  (SELECT id FROM beneficiaries b WHERE b.application_id = a.id LIMIT 1) as beneficiary_id
                FROM applications a
@@ -130,7 +133,28 @@ router.patch('/:id/status', authenticate, requireStaff, async (req, res) => {
       [status, notes || null, req.user.id, req.params.id]
     );
 
-    // ── Send email notification to applicant on approve / reject ──────────
+    // ── Slot management based on status change ────────────────────────────
+    const wasApproved = app.status === 'approved';
+    const nowApproved = status === 'approved';
+
+    if (!wasApproved && nowApproved) {
+      await run('UPDATE programs SET slots_used = slots_used + 1 WHERE id = ?', [app.program_id]);
+      await run(`
+        UPDATE programs SET status = 'closed'
+        WHERE id = ? AND slots_used >= slots AND status = 'open'
+      `, [app.program_id]);
+    } else if (wasApproved && !nowApproved) {
+      await run('UPDATE programs SET slots_used = GREATEST(slots_used - 1, 0) WHERE id = ?', [app.program_id]);
+      await run(`
+        UPDATE programs SET status = 'open'
+        WHERE id = ?
+          AND status = 'closed'
+          AND slots_used < slots
+          AND (end_date IS NULL OR DATE(end_date) >= CURDATE())
+      `, [app.program_id]);
+    }
+
+    // ── Send email notification ──────────────────────────────────────────
     if (app.applicant_id && (status === 'approved' || status === 'rejected')) {
       try {
         const applicant = await queryOne(
@@ -141,7 +165,6 @@ router.patch('/:id/status', authenticate, requireStaff, async (req, res) => {
           'SELECT title FROM programs WHERE id = ?',
           [app.program_id]
         );
-
         if (applicant?.email && program) {
           const payload = {
             to:            applicant.email,
@@ -156,7 +179,6 @@ router.patch('/:id/status', authenticate, requireStaff, async (req, res) => {
           }
         }
       } catch (emailErr) {
-        // Never fail the request because of an email error — just log it
         console.warn('[Email] Failed to send status notification:', emailErr.message);
       }
     }
@@ -165,7 +187,6 @@ router.patch('/:id/status', authenticate, requireStaff, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── POST mark application as received (staff + admin) ─────────────────────────
 router.post('/:id/receive', authenticate, requireStaff, async (req, res) => {
   try {
     const app = await queryOne('SELECT * FROM applications WHERE id = ?', [req.params.id]);
@@ -178,11 +199,21 @@ router.post('/:id/receive', authenticate, requireStaff, async (req, res) => {
     if (existing)
       return res.status(400).json({ error: `${app.full_name} is already marked as received` });
 
+    const program = await queryOne('SELECT * FROM programs WHERE id = ?', [app.program_id]);
+    const receivedCount = await queryOne(
+      'SELECT COUNT(*) as count FROM beneficiaries WHERE program_id = ?',
+      [app.program_id]
+    );
+    if (receivedCount.count >= program.slots) {
+      return res.status(400).json({
+        error: `Slots are already full for this program. Cannot mark as received.`
+      });
+    }
+
     await run(
       'INSERT INTO beneficiaries (application_id, program_id, full_name, address, contact) VALUES (?,?,?,?,?)',
       [req.params.id, app.program_id, app.full_name, app.address, app.contact]
     );
-    await run('UPDATE programs SET slots_used = slots_used + 1 WHERE id = ?', [app.program_id]);
 
     res.json({ message: `${app.full_name} has been marked as received and added to beneficiaries.` });
   } catch (e) { res.status(500).json({ error: e.message }); }

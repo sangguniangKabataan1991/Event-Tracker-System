@@ -38,6 +38,7 @@
     received_at: string;
     barangay?: string;
     notes?: string;
+    avatar_url?: string | null;
   }
 
   interface Program { id: string | number; title: string; }
@@ -56,6 +57,7 @@
     age?: number;
     barangay?: string;
     notes?: string;
+    avatar_url?: string | null;
     records: BenefitRecord[];
   }
 
@@ -512,8 +514,12 @@
           </div>
         {:else if profileData}
           <div class="flex flex-col items-center text-center gap-2 pt-2 pb-1">
-            <div class="w-16 h-16 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-2xl font-bold shrink-0">
-              {profileData.full_name.charAt(0)}
+            <div class="w-16 h-16 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-2xl font-bold shrink-0 overflow-hidden">
+              {#if profileData.avatar_url}
+                <img src={profileData.avatar_url} alt={profileData.full_name} class="w-full h-full object-cover" />
+              {:else}
+                {profileData.full_name.charAt(0)}
+              {/if}
             </div>
             <div>
               <div class="text-lg font-bold text-gray-900">{profileData.full_name}</div>
@@ -922,8 +928,12 @@
                       <tr class="hover:bg-blue-50/40 transition-colors">
                         <td class="px-4 py-3 cursor-pointer" onclick={() => openProfile(b)}>
                           <div class="flex items-center gap-2.5 min-w-0">
-                            <div class="w-7 h-7 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-xs font-bold shrink-0">
-                              {b.full_name.charAt(0)}
+                            <div class="w-7 h-7 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden">
+                              {#if b.avatar_url}
+                                <img src={b.avatar_url} alt={b.full_name} class="w-full h-full object-cover" />
+                              {:else}
+                                {b.full_name.charAt(0)}
+                              {/if}
                             </div>
                             <span class="font-medium text-gray-900 truncate">{b.full_name}</span>
                           </div>
@@ -951,8 +961,12 @@
                   <div class="flex items-center gap-3 px-4 py-3 hover:bg-blue-50/40 transition-colors">
                     <button type="button" onclick={() => openProfile(b)}
                       class="flex items-center gap-3 flex-1 min-w-0 text-left">
-                      <div class="w-8 h-8 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-xs font-bold shrink-0">
-                        {b.full_name.charAt(0)}
+                      <div class="w-8 h-8 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden">
+                        {#if b.avatar_url}
+                         <img src={b.avatar_url} alt={b.full_name} class="w-full h-full object-cover" />
+                        {:else}
+                          {b.full_name.charAt(0)}
+                        {/if}
                       </div>
                       <div class="flex-1 min-w-0">
                         <div class="font-medium text-sm text-gray-900 truncate">{b.full_name}</div>

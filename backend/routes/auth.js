@@ -1,4 +1,3 @@
-// routes/auth.js
 import { Router } from 'express';
 import bcrypt     from 'bcryptjs';
 import crypto     from 'crypto';
@@ -43,6 +42,7 @@ router.post('/login', async (req, res) => {
       contact:   user.contact  || null,
       barangay:  user.barangay || null,
       address:   user.address  || null,
+      avatar_url: user.avatar_url || null,
     },
   });
   } catch (e) {
@@ -79,6 +79,7 @@ router.post('/register', async (req, res) => {
         contact:   contact  || null,
         barangay:  barangay || null,
         address:   address  || null,
+        avatar_url: null, 
       },
     });
   } catch (e) {
@@ -192,7 +193,7 @@ router.get('/reset-password/verify', async (req, res) => {
 router.get('/me', authenticate, async (req, res) => {
   try {
     const user = await queryOne(
-      'SELECT id, username, full_name, role, position, email, contact, address, barangay FROM users WHERE id = ?',
+      'SELECT id, username, full_name, role, position, email, contact, address, barangay, avatar_url FROM users WHERE id = ?',
       [req.user.id]
     );
     if (!user) return res.status(404).json({ error: 'User not found' });

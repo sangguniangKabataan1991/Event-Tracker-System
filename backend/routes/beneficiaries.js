@@ -1,4 +1,3 @@
-// routes/beneficiaries.js
 import { Router } from 'express';
 import { query, queryOne, run } from '../db/database.js';
 import { authenticate, requireAdmin, requireStaff } from '../middleware/auth.js';
@@ -12,11 +11,13 @@ router.get('/', authenticate, requireStaff, async (req, res) => {
 
     let sql = `
       SELECT b.*, p.title AS program_title, p.category,
-             COALESCE(b.barangay, a.barangay) AS barangay,
-             COALESCE(b.age, a.age) AS age
+            COALESCE(b.barangay, a.barangay) AS barangay,
+            COALESCE(b.age, a.age) AS age,
+            u.avatar_url
       FROM beneficiaries b
       LEFT JOIN programs p ON b.program_id = p.id
       LEFT JOIN applications a ON b.application_id = a.id
+      LEFT JOIN users u ON a.applicant_id = u.id
       WHERE 1=1
     `;
     const params = [];
@@ -48,7 +49,11 @@ router.get('/search', authenticate, requireStaff, async (req, res) => {
       SELECT
         b.full_name, b.address, b.contact,
         p.title AS program_title, p.category,
-        COALESCE(a.status, 'approved') AS status,
+        CASE
+        WHEN b.application_id IS NOT NULL AND a.status = 'approved' THEN 'received'
+        WHEN b.application_id IS NULL THEN 'received'
+        ELSE COALESCE(a.status, 'received')
+        END AS status,
         b.received_at AS created_at
       FROM beneficiaries b
       LEFT JOIN programs p ON b.program_id = p.id
@@ -109,9 +114,16 @@ router.get('/reports/summary', authenticate, requireStaff, async (req, res) => {
     `);
 
     const mostAssisted = await query(`
-      SELECT full_name, address, COUNT(*) AS program_count
-      FROM beneficiaries
-      GROUP BY full_name, address
+      SELECT
+        b.full_name,
+        b.address,
+        COUNT(*) AS program_count,
+        MAX(b.id) AS id,
+        MAX(u.avatar_url) AS avatar_url
+      FROM beneficiaries b
+      LEFT JOIN applications a ON b.application_id = a.id
+      LEFT JOIN users u ON a.applicant_id = u.id
+      GROUP BY b.full_name, b.address
       ORDER BY program_count DESC
       LIMIT 20
     `);
@@ -181,10 +193,12 @@ router.get('/:id/profile', authenticate, requireStaff, async (req, res) => {
     const beneficiary = await queryOne(`
       SELECT b.*, p.title AS program_title, p.category,
              COALESCE(b.barangay, a.barangay) AS barangay,
-             COALESCE(b.age, a.age) AS age
+             COALESCE(b.age, a.age) AS age,
+             u.avatar_url
       FROM beneficiaries b
       LEFT JOIN programs p ON b.program_id = p.id
       LEFT JOIN applications a ON b.application_id = a.id
+      LEFT JOIN users u ON a.applicant_id = u.id
       WHERE b.id = ?
     `, [req.params.id]);
 
@@ -192,9 +206,13 @@ router.get('/:id/profile', authenticate, requireStaff, async (req, res) => {
 
     const records = await query(`
       SELECT
-        p.title    AS program_title,
+        p.title AS program_title,
         p.category,
-        COALESCE(a.status, 'approved') AS status,
+        CASE
+          WHEN b.application_id IS NOT NULL AND a.status = 'approved' THEN 'received'
+          WHEN b.application_id IS NULL THEN 'received'
+          ELSE COALESCE(a.status, 'received')
+        END AS status,
         b.received_at AS created_at
       FROM beneficiaries b
       LEFT JOIN programs p ON b.program_id = p.id
@@ -210,6 +228,7 @@ router.get('/:id/profile', authenticate, requireStaff, async (req, res) => {
       age:       beneficiary.age    || null,
       barangay:  beneficiary.barangay || null,
       notes:     beneficiary.notes    || null,
+      avatar_url: beneficiary.avatar_url || null, 
       records,
     });
   } catch (e) {

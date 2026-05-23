@@ -47,6 +47,7 @@
     reviewed_at?: string;
     file_count: number;
     beneficiary_id?: number;
+    applicant_avatar_url?: string | null; 
   }
 
   interface Program { id: number; title: string; }
@@ -551,9 +552,13 @@
         {#if activeTab === 'info'}
 
           <div class="flex flex-col items-center text-center gap-2 pt-1">
-            <div class="w-14 h-14 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-2xl font-bold shrink-0">
+          <div class="w-14 h-14 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-2xl font-bold shrink-0 overflow-hidden">
+            {#if detailApp.applicant_avatar_url}
+              <img src={detailApp.applicant_avatar_url} alt={detailApp.full_name} class="w-full h-full object-cover" />
+            {:else}
               {detailApp.full_name.charAt(0)}
-            </div>
+            {/if}
+          </div>
             <div>
               <div class="text-lg font-bold text-gray-900">{detailApp.full_name}</div>
               <span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full mt-1 {statusBadge(detailApp)}">
@@ -1086,9 +1091,15 @@
                       </td>
                       <td class="px-4 py-3">
                         <div class="flex items-center gap-2.5 min-w-0">
-                          <div class="w-7 h-7 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-xs font-bold shrink-0">
+
+                          <div class="w-7 h-7 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden">
+                          {#if a.applicant_avatar_url}
+                            <img src={a.applicant_avatar_url} alt={a.full_name} class="w-full h-full object-cover" />
+                          {:else}
                             {a.full_name.charAt(0)}
-                          </div>
+                          {/if}
+                         </div>
+
                           <span class="font-medium text-gray-900 truncate">{a.full_name}</span>
                         </div>
                       </td>
@@ -1134,9 +1145,15 @@
                       <Square size={16}/>
                     {/if}
                   </button>
-                  <div class="w-9 h-9 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-sm font-bold shrink-0">
-                    {a.full_name.charAt(0)}
+                  
+                  <div class="w-9 h-9 rounded-full bg-[#0A1F44] flex items-center justify-center text-white text-sm font-bold shrink-0 overflow-hidden">
+                    {#if a.applicant_avatar_url}
+                      <img src={a.applicant_avatar_url} alt={a.full_name} class="w-full h-full object-cover" />
+                    {:else}
+                      {a.full_name.charAt(0)}
+                    {/if}
                   </div>
+
                   <button class="flex-1 min-w-0 text-left" onclick={() => openDetail(a)}>
                     <div class="font-medium text-sm text-gray-900 truncate">{a.full_name}</div>
                     <div class="text-xs text-gray-400 truncate">{a.address}</div>

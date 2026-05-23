@@ -13,9 +13,9 @@
   let showPassword = $state(false);
 
   async function handleLogin() {
-    error = ''; loading = true;
+    error = '';
+    loading = true;
     try {
-      // Send as "username" — the backend checks both username and email columns
       const res = await apiFetch('/auth/login', {
         method: 'POST',
         body: { username: credential, password },
@@ -23,7 +23,7 @@
       login(res.user, res.token);
       goto('/');
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Login failed';
+      error = e instanceof Error ? e.message : 'Login failed. Please try again.';
     } finally {
       loading = false;
     }

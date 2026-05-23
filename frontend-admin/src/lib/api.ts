@@ -7,6 +7,7 @@ interface UserData {
   role: string;
   position?: string;
   email?: string;
+  avatar_url?: string | null;
 }
 
 interface FetchOptions {
@@ -15,8 +16,8 @@ interface FetchOptions {
   body?: unknown;
 }
 
-export const user           = writable<UserData | null>(null);
-export const token          = writable<string | null>(null);
+export const user            = writable<UserData | null>(null);
+export const token           = writable<string | null>(null);
 export const openProfileEdit = writable<boolean>(false);
 
 if (typeof localStorage !== 'undefined') {
@@ -40,6 +41,15 @@ export function logout() {
   localStorage.removeItem('sk_user');
 }
 
+export function updateUser(patch: Partial<UserData>) {
+  user.update((u) => {
+    if (!u) return u;
+    const updated = { ...u, ...patch };
+    localStorage.setItem('sk_user', JSON.stringify(updated));
+    return updated;
+  });
+}
+
 export const API = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 export async function apiFetch(path: string, options: FetchOptions = {}) {
@@ -54,16 +64,24 @@ export async function apiFetch(path: string, options: FetchOptions = {}) {
     body: options.body ? JSON.stringify(options.body) : undefined
   });
 
-  // Auto-logout kapag expired/invalid token
   if (res.status === 401) {
-    logout();
-    window.location.href = '/login';
-    return;
+    const t = get(token);
+    if (t) {
+      logout();
+      window.location.href = '/login';
+      return;
+    }
   }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Network error' }));
-    throw new Error(err.error || `Request failed (${res.status})`);
+    const err = await res.json().catch(() => null);
+    const message = err?.error || err?.message || err?.detail
+      || (res.status === 401 ? 'Invalid username/email or password.'
+        : res.status === 403 ? 'Access denied.'
+        : res.status === 404 ? 'Account not found.'
+        : `Request failed (${res.status})`);
+    throw new Error(message);
   }
+
   return res.json();
 }

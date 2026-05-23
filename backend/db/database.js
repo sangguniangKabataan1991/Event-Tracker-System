@@ -103,12 +103,12 @@ export async function initDatabase() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
-  // ── Safe migrations (idempotent, run every startup) ───────────────────────
   const migrations = [
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS position VARCHAR(100) DEFAULT NULL AFTER role`,
     `ALTER TABLE users MODIFY COLUMN role ENUM('admin','staff','applicant') NOT NULL DEFAULT 'staff'`,
     `ALTER TABLE beneficiaries ADD COLUMN IF NOT EXISTS barangay VARCHAR(100) DEFAULT NULL`,
     `ALTER TABLE beneficiaries ADD COLUMN IF NOT EXISTS age INT DEFAULT NULL`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500) DEFAULT NULL`,  
   ];
   for (const sql of migrations) {
     try { await pool.execute(sql); } catch (_) {}

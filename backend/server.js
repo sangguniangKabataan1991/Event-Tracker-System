@@ -2,12 +2,14 @@
 import 'dotenv/config';
 import express from 'express';
 import cors    from 'cors';
+import multer  from 'multer';
 import { fileURLToPath } from 'url';
 import { dirname, join }  from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { initDatabase, query, queryOne, run } from './db/database.js';
 import { sendWelcomeEmail, verifyEmailConnection } from './services/email.js';
 import { signToken } from './middleware/auth.js';
+import { startScheduler } from './services/scheduler.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app  = express();
@@ -15,6 +17,23 @@ const PORT = process.env.PORT || 3000;
 
 const uploadsDir = join(__dirname, 'uploads');
 if (!existsSync(uploadsDir)) mkdirSync(uploadsDir, { recursive: true });
+
+// ── Multer – Avatar Upload ─────────────────────────────────────────────────
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => {
+    const ext = file.originalname.match(/\.[^.]+$/)?.[0] || '.jpg';
+    cb(null, `avatar-${req.user?.id || 'unknown'}-${Date.now()}${ext}`);
+  },
+});
+const avatarUpload = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Only image files are allowed'));
+  },
+});
 
 app.use(cors({
   origin: [
@@ -36,6 +55,7 @@ import authRoutes        from './routes/auth.js';
 import programRoutes     from './routes/programs.js';
 import applicationRoutes from './routes/applications.js';
 import beneficiaryRoutes from './routes/beneficiaries.js';
+import { authenticate as authMiddleware } from './middleware/auth.js';
 
 app.use('/api/auth',          authRoutes);
 app.use('/api/programs',      programRoutes);
@@ -88,7 +108,7 @@ app.get('/api/users', async (req, res) => {
   try {
     res.json(
       await query(
-        'SELECT id, username, full_name, role, position, email, contact, barangay, created_at FROM users ORDER BY created_at DESC'
+        'SELECT id, username, full_name, role, position, email, contact, barangay, avatar_url, created_at FROM users ORDER BY created_at DESC'
       )
     );
   } catch (e) {
@@ -134,6 +154,32 @@ app.post('/api/users', async (req, res) => {
     if (e.code === 'ER_DUP_ENTRY')
       return res.status(400).json({ error: 'Username or email already taken' });
     console.error('[POST /api/users]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── AVATAR UPLOAD ──────────────────────────────────────────────────────────
+app.post('/api/users/me/avatar', authMiddleware, avatarUpload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const baseUrl   = `${req.protocol}://${req.get('host')}`;
+    const avatarUrl = `${baseUrl}/uploads/${req.file.filename}`;
+
+    // Delete old avatar file if exists
+    const user = await queryOne('SELECT avatar_url FROM users WHERE id = ?', [req.user.id]);
+    if (user?.avatar_url) {
+      const oldFilename = user.avatar_url.split('/uploads/')[1];
+      if (oldFilename && !oldFilename.startsWith('http')) {
+        const { unlink } = await import('fs/promises');
+        try { await unlink(join(__dirname, 'uploads', oldFilename)); } catch (_) {}
+      }
+    }
+
+    await run('UPDATE users SET avatar_url = ? WHERE id = ?', [avatarUrl, req.user.id]);
+
+    res.json({ avatar_url: avatarUrl, message: 'Avatar updated successfully' });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -256,10 +302,10 @@ process.on('uncaughtException', (err) => {
   }
 });
 
-// ── START ──────────────────────────────────────────────────────────────────
 initDatabase()
   .then(async () => {
     await verifyEmailConnection();
+    startScheduler();
     app.listen(PORT, () => {
       console.log(`\n SK System Backend running at http://localhost:${PORT}`);
       console.log(` Database: MySQL (${process.env.DB_NAME || 'sk_system'})`);
