@@ -109,6 +109,7 @@ export async function initDatabase() {
     `ALTER TABLE beneficiaries ADD COLUMN IF NOT EXISTS barangay VARCHAR(100) DEFAULT NULL`,
     `ALTER TABLE beneficiaries ADD COLUMN IF NOT EXISTS age INT DEFAULT NULL`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500) DEFAULT NULL`,  
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS birthday DATE DEFAULT NULL`,
   ];
   for (const sql of migrations) {
     try { await pool.execute(sql); } catch (_) {}

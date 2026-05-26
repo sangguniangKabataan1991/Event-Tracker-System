@@ -6,6 +6,7 @@
   import Phone from 'lucide-svelte/icons/phone';
   import MapPin from 'lucide-svelte/icons/map-pin';
   import Mail from 'lucide-svelte/icons/mail';
+  import Calendar from 'lucide-svelte/icons/calendar';
   import Eye from 'lucide-svelte/icons/eye';
   import EyeOff from 'lucide-svelte/icons/eye-off';
   import ArrowLeft from 'lucide-svelte/icons/arrow-left';
@@ -19,34 +20,31 @@
     contact:         '',
     address:         '',
     barangay:        '',
+    birthday:        '',
   });
   let error       = $state('');
   let loading     = $state(false);
   let showPass    = $state(false);
   let showConfirm = $state(false);
 
-  // Only allow letters and spaces for full name
   function handleFullNameInput(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
     input.value = input.value.replace(/[^a-zA-ZÀ-ÿ\s.'-]/g, '');
     form.full_name = input.value;
   }
 
-  // Only allow numbers, max 11 digits for PH numbers
   function handleContactInput(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
     input.value = input.value.replace(/\D/g, '').slice(0, 11);
     form.contact = input.value;
   }
 
-  // Only allow letters, numbers, spaces, and common address chars
   function handleBarangayInput(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
     input.value = input.value.replace(/[^a-zA-ZÀ-ÿ0-9\s.,''-]/g, '');
     form.barangay = input.value;
   }
 
-  // No leading spaces, no special chars for username
   function handleUsernameInput(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
     input.value = input.value.replace(/\s/g, '');
@@ -57,6 +55,7 @@
     error = '';
 
     if (!form.full_name.trim())  { error = 'Full name is required.'; return; }
+    if (!form.birthday)          { error = 'Birthday is required.'; return; }
     if (!form.contact.trim())    { error = 'Contact number is required.'; return; }
     if (form.contact.length < 10) { error = 'Enter a valid contact number (10–11 digits).'; return; }
     if (!form.contact.startsWith('09') && !form.contact.startsWith('63')) {
@@ -84,6 +83,7 @@
           contact:   form.contact,
           address:   form.address,
           barangay:  form.barangay,
+          birthday:  form.birthday,
         },
       });
       login(res.user, res.token);
@@ -135,25 +135,43 @@
           />
         </div>
 
+        <!-- Birthday -->
+        <div class="relative">
+          <button
+            type="button"
+            onclick={() => (document.getElementById('birthday-input') as HTMLInputElement).showPicker()}
+            class="w-full rounded-lg pl-9 pr-4 py-2.5 text-sm outline-none transition text-left"
+            style="background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); color: {form.birthday ? 'white' : 'rgba(255,255,255,0.3)'};"
+          >
+            {form.birthday ? form.birthday : 'Birthday *'}
+          </button>
+          <Calendar size={14} class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style="color: rgba(255,255,255,0.3);" />
+          <input
+            id="birthday-input"
+            bind:value={form.birthday}
+            type="date"
+            required
+            class="absolute opacity-0 w-0 h-0 top-0 left-0"
+            style="color-scheme: dark;"
+          />
+        </div>
+
         <!-- Contact + Barangay -->
         <div class="grid grid-cols-2 gap-2">
-          <div>
-            <div class="relative">
-              <Phone size={13} class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style="color: rgba(255,255,255,0.3);" />
-              <input
-                bind:value={form.contact}
-                placeholder="Contact No. *"
-                inputmode="numeric"
-                maxlength="11"
-                required
-                oninput={handleContactInput}
-                onfocus={focusBorder}
-                onblur={blurBorder}
-                class="w-full rounded-lg pl-8 pr-3 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition"
-                style="background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);"
-              />
-            </div>
-        
+          <div class="relative">
+            <Phone size={13} class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style="color: rgba(255,255,255,0.3);" />
+            <input
+              bind:value={form.contact}
+              placeholder="Contact No. *"
+              inputmode="numeric"
+              maxlength="11"
+              required
+              oninput={handleContactInput}
+              onfocus={focusBorder}
+              onblur={blurBorder}
+              class="w-full rounded-lg pl-8 pr-3 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition"
+              style="background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);"
+            />
           </div>
           <div class="relative">
             <MapPin size={13} class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style="color: rgba(255,255,255,0.3);" />
@@ -175,7 +193,7 @@
           <MapPin size={14} class="absolute left-3 top-3 pointer-events-none" style="color: rgba(255,255,255,0.3);" />
           <textarea
             bind:value={form.address}
-            placeholder="Full Address (Blk/Lot, Street, Barangay, City) *"
+            placeholder="Full Address *"
             required
             rows={2}
             onfocus={focusBorder}
@@ -195,21 +213,19 @@
       <div class="space-y-3">
 
         <!-- Username -->
-        <div>
-          <div class="relative">
-            <User size={14} class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style="color: rgba(255,255,255,0.3);" />
-            <input
-              bind:value={form.username}
-              placeholder="Username *"
-              autocomplete="username"
-              required
-              oninput={handleUsernameInput}
-              onfocus={focusBorder}
-              onblur={blurBorder}
-              class="w-full rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition"
-              style="background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);"
-            />
-          </div>
+        <div class="relative">
+          <User size={14} class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style="color: rgba(255,255,255,0.3);" />
+          <input
+            bind:value={form.username}
+            placeholder="Username *"
+            autocomplete="username"
+            required
+            oninput={handleUsernameInput}
+            onfocus={focusBorder}
+            onblur={blurBorder}
+            class="w-full rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition"
+            style="background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);"
+          />
         </div>
 
         <!-- Email -->
@@ -218,7 +234,9 @@
           <input
             bind:value={form.email}
             type="email"
-            placeholder="Email Address (optional)"
+            placeholder="Email Address *"
+            autocomplete="email"
+            required
             onfocus={focusBorder}
             onblur={blurBorder}
             class="w-full rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition"
@@ -227,26 +245,24 @@
         </div>
 
         <!-- Password -->
-        <div>
-          <div class="relative">
-            <Lock size={14} class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style="color: rgba(255,255,255,0.3);" />
-            <input
-              bind:value={form.password}
-              type={showPass ? 'text' : 'password'}
-              placeholder="Password *"
-              autocomplete="new-password"
-              required
-              onfocus={focusBorder}
-              onblur={blurBorder}
-              class="w-full rounded-lg pl-9 pr-10 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition"
-              style="background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);"
-            />
-            <button type="button" onclick={() => showPass = !showPass}
-              class="absolute right-3 top-1/2 -translate-y-1/2 transition"
-              style="color: rgba(255,255,255,0.3);" tabindex="-1">
-              {#if showPass}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
-            </button>
-          </div>
+        <div class="relative">
+          <Lock size={14} class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style="color: rgba(255,255,255,0.3);" />
+          <input
+            bind:value={form.password}
+            type={showPass ? 'text' : 'password'}
+            placeholder="Password *"
+            autocomplete="new-password"
+            required
+            onfocus={focusBorder}
+            onblur={blurBorder}
+            class="w-full rounded-lg pl-9 pr-10 py-2.5 text-sm text-white placeholder:text-white/30 outline-none transition"
+            style="background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);"
+          />
+          <button type="button" onclick={() => showPass = !showPass}
+            class="absolute right-3 top-1/2 -translate-y-1/2 transition"
+            style="color: rgba(255,255,255,0.3);" tabindex="-1">
+            {#if showPass}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
+          </button>
         </div>
 
         <!-- Confirm Password -->

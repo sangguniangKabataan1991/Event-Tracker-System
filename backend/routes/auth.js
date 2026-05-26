@@ -42,6 +42,7 @@ router.post('/login', async (req, res) => {
       contact:   user.contact  || null,
       barangay:  user.barangay || null,
       address:   user.address  || null,
+      birthday:  user.birthday || null,
       avatar_url: user.avatar_url || null,
     },
   });
@@ -53,14 +54,14 @@ router.post('/login', async (req, res) => {
 // ── REGISTER (public applicant signup) ────────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
-    const { username, password, full_name, email, contact, address, barangay } = req.body;
+    const { username, password, full_name, email, contact, address, barangay, birthday } = req.body;
     if (!username || !password || !full_name)
       return res.status(400).json({ error: 'Username, password, and full name required' });
 
     const hash   = await bcrypt.hash(password, 10);
     const result = await run(
-      'INSERT INTO users (username, password, full_name, role, email, contact, address, barangay) VALUES (?,?,?,?,?,?,?,?)',
-      [username, hash, full_name, 'applicant', email || null, contact || null, address || null, barangay || null]
+      'INSERT INTO users (username, password, full_name, role, email, contact, address, barangay, birthday) VALUES (?,?,?,?,?,?,?,?,?)',
+      [username, hash, full_name, 'applicant', email || null, contact || null, address || null, barangay || null, birthday || null]
     );
 
     const token = signToken({
@@ -79,6 +80,7 @@ router.post('/register', async (req, res) => {
         contact:   contact  || null,
         barangay:  barangay || null,
         address:   address  || null,
+        birthday:  birthday  || null,
         avatar_url: null, 
       },
     });
@@ -193,7 +195,7 @@ router.get('/reset-password/verify', async (req, res) => {
 router.get('/me', authenticate, async (req, res) => {
   try {
     const user = await queryOne(
-      'SELECT id, username, full_name, role, position, email, contact, address, barangay, avatar_url FROM users WHERE id = ?',
+      'SELECT id, username, full_name, role, position, email, contact, address, barangay, birthday, avatar_url FROM users WHERE id = ?',
       [req.user.id]
     );
     if (!user) return res.status(404).json({ error: 'User not found' });
